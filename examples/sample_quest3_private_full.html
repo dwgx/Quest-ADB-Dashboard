@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Quest ADB 设备审计报告 - PRIVATE FULL DEMO</title>
+<style>
+:root{--page:#eef1f5;--paper:#fff;--ink:#182033;--muted:#667085;--line:#d8e0eb;--line2:#edf1f6;--soft:#f7f9fc;--accent:#1d4ed8;--accent2:#0f172a;--ok:#118447;--warn:#9a5b00;--shadow:0 18px 48px rgba(15,23,42,.13)}*{box-sizing:border-box}html,body{margin:0;background:var(--page);color:var(--ink);font:14px/1.52 "Segoe UI","Microsoft YaHei",Arial,sans-serif;letter-spacing:0}.sheet{width:min(1120px,calc(100% - 40px));margin:30px auto;background:var(--paper);border:1px solid #dfe6f0;box-shadow:var(--shadow)}.pad{padding:38px 44px}.actions{position:sticky;top:0;z-index:3;display:flex;justify-content:flex-end;gap:8px;width:min(1120px,calc(100% - 40px));margin:18px auto -16px}.btn{border:1px solid #cbd5e1;background:#fff;color:#0f172a;border-radius:6px;padding:8px 12px;font-weight:800;cursor:pointer}.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}.doc-head{display:grid;grid-template-columns:1fr 340px;gap:28px;border-bottom:3px solid var(--accent2);padding-bottom:24px}.kicker{display:inline-block;color:var(--accent);font-size:12px;font-weight:900;letter-spacing:.08em;text-transform:uppercase;margin-bottom:10px}h1{font-size:32px;line-height:1.12;margin:0 0 10px;font-weight:900;color:#0f172a}.sub{color:var(--muted);max-width:680px;margin:0}.meta{border:1px solid var(--line);align-self:start;min-width:0}.meta-row{display:grid;grid-template-columns:118px minmax(0,1fr);border-bottom:1px solid var(--line2);min-height:38px}.meta-row:last-child{border-bottom:0}.meta-row span{background:var(--soft);color:var(--muted);font-weight:800;padding:9px 12px;border-right:1px solid var(--line2)}.meta-row b{padding:9px 12px;min-width:0;overflow-wrap:anywhere;word-break:break-word}.stamp{display:inline-block;border:2px solid #9a5b00;color:#9a5b00;font-weight:900;padding:4px 8px;border-radius:4px;transform:rotate(-1deg)}.party-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin:26px 0}.box{border:1px solid var(--line);background:#fff;min-width:0}.box h2,.section h2{font-size:13px;text-transform:uppercase;letter-spacing:.08em;color:#344054;margin:0;background:var(--soft);border-bottom:1px solid var(--line);padding:10px 12px}.box-body{padding:13px 14px}.big{font-size:22px;font-weight:900;margin-bottom:6px}.muted{color:var(--muted)}.chips{display:flex;flex-wrap:wrap;gap:7px;margin-top:12px}.chip{border:1px solid var(--line);background:var(--soft);border-radius:999px;padding:5px 9px;font-weight:800}.summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));border:1px solid var(--line);margin:20px 0 24px}.sum-cell{padding:13px 14px;border-right:1px solid var(--line2);min-width:0}.sum-cell:last-child{border-right:0}.sum-cell span{display:block;color:var(--muted);font-size:12px;font-weight:800;text-transform:uppercase}.sum-cell b{display:block;font-size:18px;margin-top:5px;overflow-wrap:anywhere;word-break:break-word}.section{margin-top:22px}.audit-table{width:100%;border-collapse:collapse;border:1px solid var(--line);table-layout:fixed}.audit-table th{background:#f2f5f9;color:#344054;text-align:left;font-size:12px;text-transform:uppercase;letter-spacing:.06em;border-bottom:2px solid #111827;padding:10px 12px}.audit-table td{border-top:1px solid var(--line2);padding:10px 12px;vertical-align:top;overflow-wrap:anywhere;word-break:break-word}.audit-table td:nth-child(1){width:22%;color:#475467;font-weight:800}.audit-table td:nth-child(2){width:44%;font-weight:800;color:#101828}.audit-table td:nth-child(3){width:34%;color:#667085}.note{border-left:4px solid var(--warn);background:#fff8eb;border-top:1px solid #f3d19c;border-right:1px solid #f3d19c;border-bottom:1px solid #f3d19c;padding:13px 14px;margin-top:18px}.raw details{border:1px solid var(--line);margin:10px 0;background:#fff}.raw summary{cursor:pointer;background:var(--soft);padding:10px 12px;font-weight:900}.raw pre{margin:0;max-height:420px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word;color:#475467;padding:12px;font:12px/1.5 Consolas,"Microsoft YaHei",monospace}.foot{display:grid;grid-template-columns:1fr auto;gap:20px;align-items:end;margin-top:28px;border-top:2px solid #111827;padding-top:16px}.foot b{font-size:12px;text-transform:uppercase;letter-spacing:.08em}.total{min-width:250px;border:1px solid var(--line)}.total div{display:grid;grid-template-columns:1fr auto;padding:9px 12px;border-bottom:1px solid var(--line2)}.total div:last-child{border-bottom:0;background:var(--soft);font-weight:900}@media(max-width:860px){.doc-head,.party-grid,.summary{grid-template-columns:1fr}.pad{padding:24px 18px}.sheet,.actions{width:calc(100% - 18px)}.summary{display:block}.sum-cell{border-right:0;border-bottom:1px solid var(--line2)}.audit-table{table-layout:auto}.audit-table th:nth-child(3),.audit-table td:nth-child(3){display:none}.foot{grid-template-columns:1fr}.total{min-width:0}}@media(max-width:520px){.meta-row{grid-template-columns:105px minmax(0,1fr)}h1{font-size:28px}.actions{justify-content:flex-start;overflow:auto}}@media print{body{background:#fff}.actions{display:none}.sheet{width:auto;margin:0;border:0;box-shadow:none}.pad{padding:0}.raw pre{max-height:none}.box,.audit-table,.raw details{break-inside:avoid}@page{size:A4;margin:13mm}}
+</style>
+</head>
+<body>
+<div class="actions"><button class="btn primary" onclick="window.print()">打印 / 保存 PDF</button><button class="btn" onclick="document.querySelectorAll('details').forEach(d=>d.open=true)">展开附录</button></div>
+<main class="sheet"><div class="pad">
+<header class="doc-head">
+  <div>
+    <div class="kicker">Quest ADB Tools / Read-only export</div>
+    <h1>Quest ADB 设备审计报告</h1>
+    <p class="sub">基于公开 ADB 只读命令生成，用于整理 Quest 头显身份、系统、健康、工厂/校准线索、包与能力。导出流程不写入设置，不修改设备。作者测试设备版本：Quest 3。</p>
+  </div>
+  <aside class="meta">
+    <div class="meta-row"><span>报告编号</span><b>QADB-20260609-120000</b></div>
+    <div class="meta-row"><span>生成时间</span><b>2026-06-09 12:00:00</b></div>
+    <div class="meta-row"><span>隐私级别</span><b><i class="stamp">PRIVATE FULL DEMO</i></b></div>
+    <div class="meta-row"><span>ADB 来源</span><b title="C:\Program Files\VIVE Hub\VIVE Business Streaming\CommonTools\ADB\adb.exe">VIVE Business Streaming ADB</b></div>
+  </aside>
+</header>
+
+<section class="party-grid">
+  <div class="box"><h2>设备</h2><div class="box-body"><div class="big">Quest 3</div><div class="muted">Oculus / Meta / eureka / eureka</div><div class="chips"><span class="chip">Serial Q3D9C4M8Z2MO</span><span class="chip">Android 14 / SDK 34</span><span class="chip">Qualcomm SXR2230P</span></div></div></div>
+  <div class="box"><h2>采集策略</h2><div class="box-body"><div class="big">私有完整版</div><div class="muted">保留完整私有证据，适合本机留档；不要直接公开分享。</div><div class="chips"><span class="chip">No ADB write</span><span class="chip">HTML/PDF ready</span><span class="chip">Quest 3 noted</span></div></div></div>
+</section>
+
+<section class="summary">
+  <div class="sum-cell"><span>电量 / 温度</span><b>86% / 32.0C</b></div>
+  <div class="sum-cell"><span>显示</span><b>4128x2208 / 72Hz</b></div>
+  <div class="sum-cell"><span>存储</span><b>20G / 448G used 5%</b></div>
+  <div class="sum-cell"><span>校准</span><b>Eureka / PVT1.1 / Factory</b></div>
+</section>
+
+<section class="section"><h2>设备身份</h2><table class="audit-table"><thead><tr><th>字段</th><th>值</th><th>证据来源</th></tr></thead><tbody>
+<tr><td>序列号</td><td>Q3D9C4M8Z2MO</td><td>adb devices / getprop</td></tr>
+<tr><td>ADB 设备行</td><td>Q3D9C4M8Z2MO device product:eureka model:Quest_3 device:eureka transport_id:7</td><td>adb devices -l</td></tr>
+<tr><td>厂商 / 品牌</td><td>Oculus / Meta</td><td>ro.product.manufacturer / brand</td></tr>
+<tr><td>型号</td><td>Quest 3</td><td>ro.product.model</td></tr>
+<tr><td>产品 / 设备代号</td><td>eureka / eureka</td><td>ro.product.name / device</td></tr>
+<tr><td>SoC / ABI</td><td>Qualcomm SXR2230P / arm64-v8a</td><td>ro.soc.model / ro.product.cpu.abi</td></tr>
+</tbody></table></section>
+
+<section class="section"><h2>系统与构建</h2><table class="audit-table"><thead><tr><th>字段</th><th>值</th><th>证据来源</th></tr></thead><tbody>
+<tr><td>Android</td><td>Android 14 / SDK 34</td><td>getprop</td></tr>
+<tr><td>Build ID</td><td>UP1A.231005.007.A1</td><td>ro.build.id</td></tr>
+<tr><td>安全补丁</td><td>System 2026-05-01 / Vendor 2026-05-05</td><td>ro.build.version.security_patch</td></tr>
+<tr><td>Branch</td><td>releases-oculus-14.0-v204</td><td>ro.build.version.incremental</td></tr>
+<tr><td>Fingerprint</td><td>oculus/eureka/eureka:14/UP1A.231005.007/204123001:user/release-keys</td><td>ro.build.fingerprint</td></tr>
+<tr><td>Kernel</td><td>Linux 5.10.240-g69827d40d782</td><td>uname -a</td></tr>
+</tbody></table></section>
+
+<section class="section"><h2>显示 / 电源 / 网络 / 热</h2><table class="audit-table"><thead><tr><th>字段</th><th>值</th><th>证据来源</th></tr></thead><tbody>
+<tr><td>显示摘要</td><td>4128x2208 / 72Hz / density 200 / 98 modes</td><td>dumpsys display</td></tr>
+<tr><td>面板线索</td><td>Sharp novatek panel, activeModeId=12</td><td>dumpsys display</td></tr>
+<tr><td>电池</td><td>86% / 32.0C / health 正常 / USB powered</td><td>dumpsys battery</td></tr>
+<tr><td>唤醒状态</td><td>Asleep / mStayOn=false / stay_on_while_plugged_in=0</td><td>dumpsys power / settings</td></tr>
+<tr><td>USB</td><td>connected=true / configured=true / functions=adb,xrsp</td><td>dumpsys usb</td></tr>
+<tr><td>Wi-Fi</td><td>IP 198.51.100.42 / SSID Quest-Lab-5G / standard 5 / 5180MHz / 866Mbps / RSSI -48</td><td>dumpsys wifi / ip addr</td></tr>
+<tr><td>蓝牙</td><td>enabled=true / state=ON / name=Quest 3</td><td>dumpsys bluetooth_manager</td></tr>
+<tr><td>内存</td><td>可用 5.4 GB / 总计 7.6 GB</td><td>/proc/meminfo</td></tr>
+</tbody></table></section>
+
+<section class="section"><h2>Factory / Calibration 元数据</h2><table class="audit-table"><thead><tr><th>字段</th><th>值</th><th>证据来源</th></tr></thead><tbody>
+<tr><td>DeviceType</td><td>Eureka</td><td>dumpsys sensorservice metadata</td></tr>
+<tr><td>BuildType</td><td>PVT1.1</td><td>dumpsys sensorservice metadata</td></tr>
+<tr><td>Factory Timestamp</td><td>2025-11-15T08:15:45</td><td>dumpsys sensorservice metadata</td></tr>
+<tr><td>location_id</td><td>gtk</td><td>dumpsys sensorservice metadata</td></tr>
+<tr><td>station_id</td><td>wf-eureka-iot-2up-xx</td><td>dumpsys sensorservice metadata</td></tr>
+<tr><td>station_type</td><td>2up calibration</td><td>dumpsys sensorservice metadata</td></tr>
+<tr><td>cal_test_id</td><td>eureka_imu_display_alignment_v3</td><td>dumpsys sensorservice metadata</td></tr>
+<tr><td>Online calibration</td><td>vega_online_calibration present</td><td>dumpsys sensorservice metadata</td></tr>
+</tbody></table></section>
+
+<div class="note"><b>推断边界：</b>可以记录设备族、硬件阶段、校准记录和工厂测试线索，例如 Quest 3 / Eureka / PVT / Factory / Online calibration。不能把 location_id、station_id、station_type 可靠翻译成国家、城市或具体工厂；Wi-Fi 国家码也不是出产地。</div>
+
+<section class="section"><h2>包与系统能力</h2><table class="audit-table"><thead><tr><th>字段</th><th>值</th><th>证据来源</th></tr></thead><tbody>
+<tr><td>包数量</td><td>198</td><td>pm list packages -f -i</td></tr>
+<tr><td>Feature 数量</td><td>90</td><td>pm list features</td></tr>
+<tr><td>系统库</td><td>com.oculus.eye_tracking, android.hardware.vr.high_performance, vulkan level 1</td><td>cmd package list libraries / features</td></tr>
+<tr><td>Virtual Desktop</td><td>VirtualDesktop.Android / 1.34.x / installed</td><td>dumpsys package VirtualDesktop.Android</td></tr>
+<tr><td>采集警告</td><td>-</td><td>export collector</td></tr>
+</tbody></table></section>
+
+<section class="section raw"><h2>原始 ADB 输出附录</h2>
+<details open><summary>getprop · synthetic · exit 0</summary><pre>[ro.product.model]: [Quest 3]
+[ro.product.name]: [eureka]
+[ro.product.device]: [eureka]
+[ro.soc.model]: [SXR2230P]
+[ro.build.fingerprint]: [oculus/eureka/eureka:14/UP1A.231005.007/204123001:user/release-keys]</pre></details>
+<details><summary>dumpsys sensorservice · synthetic · exit 0</summary><pre>{"Device":{"DeviceType":"Eureka","BuildType":"PVT1.1","SerialNumber":"Q3D9C4M8Z2MO"},"Metadata":{"Source":"Factory","NamedTags":{"location_id":"gtk","station_id":"wf-eureka-iot-2up-xx","cal_test_id":"eureka_imu_display_alignment_v3"}}}</pre></details>
+<details><summary>logcat · synthetic · exit 0</summary><pre>06-09 12:00:01.003 I VrShell: display mode 4128x2208@72Hz
+06-09 12:00:01.236 I WifiClient: connected ssid=Quest-Lab-5G bssid=<demo-bssid> rssi=-48
+06-09 12:00:02.014 I ThermalService: skin=32.0C status=0</pre></details>
+</section>
+
+<footer class="foot"><div><b>Quest ADB Tools by dwgx1337</b><br><span class="muted">Public repo sample must use share-safe export. Private full export is for local evidence only.</span></div><div class="total"><div><span>Packages</span><b>198</b></div><div><span>Features</span><b>90</b></div><div><span>Status</span><b>Private</b></div></div></footer>
+</div></main>
+</body>
+</html>

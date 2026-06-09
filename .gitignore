@@ -1,0 +1,12 @@
+build/
+*.user
+*.suo
+*.tmp
+*.log
+Quest_ADB_Logs/
+exports/
+private/
+*.bak
+*.b64
+*.exe
+!dist/Quest_ADB_Tools.bat
