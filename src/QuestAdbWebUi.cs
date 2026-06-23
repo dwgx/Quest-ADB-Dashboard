@@ -54,6 +54,7 @@ class QuestAdbWebUi
     static void Main(string[] args)
     {
         try { Console.OutputEncoding = Encoding.UTF8; } catch { }
+        if (args.Length > 0 && args[0] == "--self-test") { Environment.Exit(SelfTest()); return; }
         if (args.Length > 0) AdbPath = args[0];
         InitLog(args.Length > 1 ? args[1] : AppDomain.CurrentDomain.BaseDirectory);
 
@@ -94,6 +95,38 @@ class QuestAdbWebUi
                 }, c);
             }
             catch (Exception ex) { Console.WriteLine("请求处理失败：" + ex.Message); Log("请求处理失败：" + ex.Message); }
+        }
+    }
+
+    static int SelfTest()
+    {
+        List<string> failures = new List<string>();
+        string sensor = "{\\\"Device\\\":{\\\"BuildType\\\":\\\"PVT1.1\\\",\\\"DeviceType\\\":\\\"Eureka\\\"},\\\"FileFormat\\\":{\\\"Timestamp\\\":\\\"2025-11-15T08:15:45\\\"},\\\"Metadata\\\":{\\\"NamedTags\\\":{\\\"location_id\\\":\\\"gtk\\\",\\\"station_id\\\":\\\"wf-eureka-iot-2up-41\\\",\\\"calibration_type\\\":\\\"IOT\\\"}}}";
+        Expect(failures, "DeviceType", "Eureka", ExtractJsonish(sensor, "DeviceType"));
+        Expect(failures, "BuildType", "PVT1.1", ExtractJsonish(sensor, "BuildType"));
+        Expect(failures, "Timestamp", "2025-11-15T08:15:45", ExtractJsonish(sensor, "Timestamp"));
+        Expect(failures, "location_id", "gtk", ExtractJsonish(sensor, "location_id"));
+        Expect(failures, "station_id", "wf-eureka-iot-2up-41", ExtractJsonish(sensor, "station_id"));
+        ExpectContains(failures, "FactorySummary", FactorySummary(sensor), "Eureka", "PVT1.1", "loc gtk", "station wf-eureka-iot-2up-41");
+
+        string cameras = "{\\\"SensorType\\\":\\\"OG01A\\\"}{\\\"SensorType\\\":\\\"OV7251\\\"}{\\\"SensorType\\\":\\\"IMX471\\\"}";
+        ExpectContains(failures, "CameraSummary", CameraSummary("", cameras), "OG01A 1", "OV7251 1", "IMX471 1");
+
+        if (failures.Count == 0) { Console.WriteLine("QuestAdbWebUi self-test PASS"); return 0; }
+        foreach (string failure in failures) Console.Error.WriteLine(failure);
+        return 1;
+    }
+
+    static void Expect(List<string> failures, string name, string expected, string actual)
+    {
+        if (actual != expected) failures.Add(name + ": expected [" + expected + "] but got [" + actual + "]");
+    }
+
+    static void ExpectContains(List<string> failures, string name, string actual, params string[] needles)
+    {
+        foreach (string needle in needles)
+        {
+            if ((actual ?? "").IndexOf(needle, StringComparison.OrdinalIgnoreCase) < 0) failures.Add(name + ": missing [" + needle + "] in [" + Clean(actual) + "]");
         }
     }
 
@@ -930,10 +963,24 @@ class QuestAdbWebUi
     static string FirstRegex(string text, string pattern) { return RegexValue(text, pattern); }
     static string ExtractJsonish(string text, string key)
     {
+        string v = ExtractJsonishRaw(text, key);
+        if (v != "-") return v;
+        string normalized = NormalizeEmbeddedJson(text);
+        if (!object.ReferenceEquals(normalized, text)) return ExtractJsonishRaw(normalized, key);
+        return "-";
+    }
+    static string ExtractJsonishRaw(string text, string key)
+    {
         Match m = Regex.Match(text ?? "", "\\\"" + Regex.Escape(key) + "\\\"\\s*:\\s*\\\"([^\\\"]*)\\\"", RegexOptions.IgnoreCase);
         if (m.Success) return Clean(m.Groups[1].Value);
         m = Regex.Match(text ?? "", "\\\"" + Regex.Escape(key) + "\\\"\\s*:\\s*([^,}\\s]+)", RegexOptions.IgnoreCase);
         return m.Success ? Clean(m.Groups[1].Value.Trim('"')) : "-";
+    }
+    static string NormalizeEmbeddedJson(string text)
+    {
+        string s = text ?? "";
+        for (int i = 0; i < 2 && s.IndexOf("\\\"", StringComparison.Ordinal) >= 0; i++) s = s.Replace("\\\"", "\"");
+        return s;
     }
     static string StorageSummary(string df)
     {
@@ -1020,9 +1067,10 @@ class QuestAdbWebUi
     static string CameraSummary(string camera, string sensor)
     {
         int devices = CountRegex(camera, @"CameraDeviceClient|Camera\s+ID|== Camera device");
-        int og = CountRegex(sensor, @"""SensorType"":""OG01A""");
-        int ov = CountRegex(sensor, @"""SensorType"":""OV7251""");
-        int imx = CountRegex(sensor, @"""SensorType"":""IMX471""");
+        string normalizedSensor = NormalizeEmbeddedJson(sensor);
+        int og = CountRegex(normalizedSensor, @"""SensorType""\s*:\s*""OG01A""");
+        int ov = CountRegex(normalizedSensor, @"""SensorType""\s*:\s*""OV7251""");
+        int imx = CountRegex(normalizedSensor, @"""SensorType""\s*:\s*""IMX471""");
         List<string> p = new List<string>();
         if (devices > 0) p.Add(devices + " camera entries");
         if (og + ov + imx > 0) p.Add("cal sensors OG01A " + og + " / OV7251 " + ov + " / IMX471 " + imx);

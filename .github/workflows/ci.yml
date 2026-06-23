@@ -26,6 +26,12 @@ jobs:
         shell: pwsh
         run: powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\smoke-safe-mcp.ps1
 
+      - name: Build WebUI and parser self-test
+        shell: pwsh
+        run: |
+          powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\build-webui.ps1
+          .\build\QuestAdbWebUi.exe --self-test
+
       - name: BAT smoke tests
         shell: cmd
         run: |

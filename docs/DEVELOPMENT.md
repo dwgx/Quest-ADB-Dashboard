@@ -43,6 +43,8 @@ cmd /d /c "call dist\Quest_ADB_Tools.bat help-test"
 cmd /d /c "call dist\Quest_ADB_Tools.bat adb-scan"
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\smoke-safe-mcp.ps1
 python -m unittest tests.test_safe_mcp_policy
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\build-webui.ps1
+.\build\QuestAdbWebUi.exe --self-test
 ```
 
 Expected:

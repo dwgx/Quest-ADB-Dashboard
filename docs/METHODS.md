@@ -32,6 +32,11 @@ Some devices expose JSON-like metadata inside `dumpsys sensorservice`. The tool 
 - `calibration_type`
 - Online calibration markers
 
+Some firmware prints this metadata as a JSON string embedded inside another
+dump line, so keys may appear escaped as `\"DeviceType\"` rather than plain
+`"DeviceType"`. The collector normalizes both forms before extracting summary
+fields.
+
 These are internal evidence fields. They are not proven country, city, factory, or production-line names. The report should show the value and label uncertainty instead of translating codes into real-world locations.
 
 ## What ADB Cannot Reliably Prove

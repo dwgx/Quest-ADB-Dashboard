@@ -1,5 +1,24 @@
 # Release Notes
 
+## v0.1.3
+
+Factory/calibration parser fix.
+
+- Fixed WebUI and export parsing for `dumpsys sensorservice` metadata where
+  Quest firmware returns JSON embedded as escaped strings such as `\"Device\"`.
+- Factory/calibration summaries can now show exposed values such as `Eureka`,
+  `PVT1.1`, factory timestamp, `location_id`, and `station_id` when the
+  firmware makes them visible.
+- Fixed camera calibration sensor counting for escaped `SensorType` metadata.
+- Added a WebUI parser self-test and CI coverage so escaped calibration
+  metadata does not regress silently.
+
+Known boundary:
+
+- The tool still does not translate internal `location_id`, `station_id`, or
+  `station_type` codes into country, city, factory, or production-line claims.
+  Those mappings are not proven by public ADB output.
+
 ## v0.1.2
 
 CI smoke fix for clean GitHub Actions runners.
