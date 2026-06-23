@@ -1,5 +1,29 @@
 # Release Notes
 
+## v0.1.1
+
+Reliability and release-readiness update.
+
+- Fixed the Windows BAT Chinese UI path so UTF-8 menu/help/status text is no
+  longer parsed by `cmd.exe` as commands.
+- Fixed WebUI first launch feedback and cache behavior. First launch now shows
+  an unpacking message, extracts the embedded WebUI faster, and reuses a stable
+  cached EXE for the same BAT size.
+- Added a WebUI smoke-test switch:
+  `QUEST_ADB_WEBUI_NO_BROWSER=1`.
+- Added an optional read-only MCP server for CI/agent inventory workflows.
+- Added offline CI checks for BAT smoke, MCP protocol registration, and MCP
+  safety-policy unit tests.
+- Hardened MCP ADB safety checks so state-changing commands are blocked even
+  when ADB global options such as `-s SERIAL` are present.
+- Added public documentation for the MCP safety boundary and CI workflow.
+
+Known boundary:
+
+- The export path and MCP path are read-only. The broader BAT/WebUI tool still
+  includes interactive state-changing convenience actions for local debugging;
+  those actions are documented and require explicit user action.
+
 ## v0.1.0
 
 Initial public release.

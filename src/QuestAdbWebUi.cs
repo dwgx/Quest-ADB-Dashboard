@@ -73,7 +73,10 @@ class QuestAdbWebUi
         Log("服务启动：http://127.0.0.1:" + Port + "/");
         Log("ADB: " + AdbPath);
         try { string initialLine, initialHint; Log("初始连接状态：" + SelectDevice(out initialLine, out initialHint) + " " + Clean(initialLine) + " " + initialHint); } catch { }
-        try { Process.Start(url); } catch { }
+        if (!"1".Equals(Environment.GetEnvironmentVariable("QUEST_ADB_WEBUI_NO_BROWSER"), StringComparison.OrdinalIgnoreCase))
+        {
+            try { Process.Start(url); } catch { }
+        }
 
         while (true)
         {

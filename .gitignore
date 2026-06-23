@@ -1,4 +1,9 @@
 build/
+release/
+.venv-mcp/
+__pycache__/
+*.py[cod]
+NEXT_AGENT_HANDOFF.md
 *.user
 *.suo
 *.tmp

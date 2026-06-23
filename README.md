@@ -8,10 +8,11 @@ Author test device: **Meta Quest 3** (`eureka`). Most read-only Android/ADB inve
 
 ## What It Does
 
-- Finds `adb.exe` from common Windows locations, including Android platform-tools and VIVE Business Streaming.
+- Finds `adb.exe` from common Windows locations, including Android platform-tools and VIVE Hub installs under `C:\Program Files` or `D:\Software`.
 - Runs as one end-user file: `dist/Quest_ADB_Tools.bat`.
 - Starts a local WebUI bound to `127.0.0.1`.
 - Shows connection, battery, power, Wi-Fi, storage, memory, display, thermal, controller hints, build metadata, and factory/calibration clues.
+- Provides an optional read-only MCP server for CI/agent inventory workflows.
 - Exports two standalone HTML reports:
   - `share-safe`: redacted report intended for support posts, GitHub issues, and screenshots.
   - `private-full`: complete local report for personal troubleshooting only.
@@ -32,6 +33,11 @@ The **HTML export path is read-only**. It uses public ADB reads such as:
 - `pm list features`
 
 The broader WebUI and BAT menu also contain interactive convenience actions for sleep, wake, keep-awake, wireless ADB, restore, and custom settings. Those actions are separate from export and can change headset state. Use them only when you understand the effect.
+
+The optional MCP server is stricter than the WebUI. It exposes only read-only
+ADB inventory tools and has no generic shell, install, uninstall, push, pull,
+reboot, wireless ADB, settings write, input, or broadcast tool. See
+[Safe MCP and CI](docs/SAFE_MCP_CI.md).
 
 ## Quick Start
 
@@ -82,6 +88,8 @@ scripts/
   generate-sample-reports.ps1
 docs/
   *.md                       Public Quest/ADB knowledge base and workflow docs.
+mcp/
+  quest_adb_safe_mcp.py      Read-only MCP server for CI/agent workflows.
 examples/
   sample_quest3_share_safe.html
   sample_quest3_share_safe.png

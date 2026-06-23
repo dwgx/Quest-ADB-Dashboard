@@ -41,6 +41,8 @@ Screenshots can be refreshed with a local browser from the generated HTML. Revie
 cmd /d /c "call dist\Quest_ADB_Tools.bat menu-test"
 cmd /d /c "call dist\Quest_ADB_Tools.bat help-test"
 cmd /d /c "call dist\Quest_ADB_Tools.bat adb-scan"
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\smoke-safe-mcp.ps1
+python -m unittest tests.test_safe_mcp_policy
 ```
 
 Expected:
@@ -49,8 +51,18 @@ Expected:
 - No `not recognized`.
 - No `syntax is incorrect`.
 - WebUI starts on `127.0.0.1`.
+- Safe MCP server registers tools and keeps only read-only ADB helpers.
+- `adb-scan` may report no ADB on a clean runner; that is acceptable as long
+  as it prints diagnostics instead of crashing.
 
 Run `status` only when a connected Quest is available and you explicitly want a live read.
+
+Run MCP live status only when a connected authorized Quest is available and you
+explicitly want a read-only device snapshot:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\smoke-safe-mcp.ps1 -LiveAdb
+```
 
 ## Release Notes
 

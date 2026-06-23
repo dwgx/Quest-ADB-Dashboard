@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  smoke:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Compile safe MCP server
+        run: python -m py_compile mcp/quest_adb_safe_mcp.py
+
+      - name: Safe MCP policy tests
+        run: python -m unittest tests.test_safe_mcp_policy
+
+      - name: Safe MCP protocol smoke
+        shell: pwsh
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\smoke-safe-mcp.ps1
+
+      - name: BAT smoke tests
+        shell: cmd
+        run: |
+          call dist\Quest_ADB_Tools.bat menu-test
+          call dist\Quest_ADB_Tools.bat help-test
+          > "%TEMP%\quest-fake-adb.cmd" echo @echo off
+          >> "%TEMP%\quest-fake-adb.cmd" echo if /i "%%1"=="version" echo Android Debug Bridge version 1.0.41
+          >> "%TEMP%\quest-fake-adb.cmd" echo exit /b 0
+          set "ADB_EXE=%TEMP%\quest-fake-adb.cmd"
+          call dist\Quest_ADB_Tools.bat adb-scan
+
+      - name: Review dangerous ADB families remain documented
+        shell: pwsh
+        run: |
+          $patterns = @(
+            'settings put',
+            'settings delete',
+            'input keyevent',
+            'am broadcast',
+            'tcpip',
+            'install',
+            'uninstall',
+            'push',
+            'reboot'
+          )
+          foreach ($pattern in $patterns) {
+            $hit = Select-String -Path README.md,docs\*.md,mcp\*.py,src\*.cs,dist\*.bat -Pattern $pattern -SimpleMatch -ErrorAction SilentlyContinue
+            if (!$hit) { throw "Expected documented/reviewable pattern missing: $pattern" }
+          }
