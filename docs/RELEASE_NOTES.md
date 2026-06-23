@@ -1,5 +1,15 @@
 # Release Notes
 
+## v0.1.2
+
+CI smoke fix for clean GitHub Actions runners.
+
+- Fixed `scripts/smoke-safe-mcp.ps1` so the expected "MCP dependency missing"
+  import check does not abort under PowerShell 7 with
+  `$ErrorActionPreference = 'Stop'`.
+- Increased first-time MCP dependency install timeout for clean CI runners.
+- Verified GitHub Actions CI passes on `main`.
+
 ## v0.1.1
 
 Reliability and release-readiness update.
