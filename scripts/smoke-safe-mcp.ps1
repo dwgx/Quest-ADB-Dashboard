@@ -15,24 +15,32 @@ if (!(Test-Path -LiteralPath $pythonExe)) {
 }
 
 $needInstall = $false
-& $pythonExe -c "import mcp, mcp.client.stdio, mcp.server.fastmcp" >$null 2>$null
-if ($LASTEXITCODE -ne 0) {
-  $needInstall = $true
+$oldErrorActionPreference = $ErrorActionPreference
+try {
+  $ErrorActionPreference = 'Continue'
+  & $pythonExe -c "import mcp, mcp.client.stdio, mcp.server.fastmcp" *> $null
+  if ($LASTEXITCODE -ne 0) { $needInstall = $true }
+}
+finally {
+  $ErrorActionPreference = $oldErrorActionPreference
 }
 if ($needInstall) {
   $pipOut = Join-Path $env:TEMP ('quest_adb_safe_mcp_pip_' + [guid]::NewGuid().ToString('N') + '.out')
   $pipErr = Join-Path $env:TEMP ('quest_adb_safe_mcp_pip_' + [guid]::NewGuid().ToString('N') + '.err')
   try {
     $pip = Start-Process -FilePath $pythonExe -ArgumentList @('-m', 'pip', 'install', '--disable-pip-version-check', '-q', '-r', (Join-Path $root 'mcp\requirements.txt')) -NoNewWindow -RedirectStandardOutput $pipOut -RedirectStandardError $pipErr -PassThru
-    if (!$pip.WaitForExit([Math]::Max(30, $TimeoutSeconds) * 1000)) {
+    $pipTimeoutSeconds = [Math]::Max(120, $TimeoutSeconds)
+    if (!$pip.WaitForExit($pipTimeoutSeconds * 1000)) {
       try { $pip.Kill($true) } catch { try { $pip.Kill() } catch {} }
       $outText = if (Test-Path -LiteralPath $pipOut) { Get-Content -LiteralPath $pipOut -Raw -ErrorAction SilentlyContinue } else { '' }
       $errText = if (Test-Path -LiteralPath $pipErr) { Get-Content -LiteralPath $pipErr -Raw -ErrorAction SilentlyContinue } else { '' }
-      throw "pip install for Safe MCP timed out after $([Math]::Max(30, $TimeoutSeconds)) seconds.`nSTDOUT:`n$outText`nSTDERR:`n$errText"
+      throw "pip install for Safe MCP timed out after $pipTimeoutSeconds seconds.`nSTDOUT:`n$outText`nSTDERR:`n$errText"
     }
-    if ($pip.ExitCode -ne 0) {
+    $pip.Refresh()
+    $pipExitCode = if ($null -eq $pip.ExitCode) { 0 } else { $pip.ExitCode }
+    if ($pipExitCode -ne 0) {
       $errText = if (Test-Path -LiteralPath $pipErr) { Get-Content -LiteralPath $pipErr -Raw -ErrorAction SilentlyContinue } else { '' }
-      throw "pip install for Safe MCP failed with exit code $($pip.ExitCode).`nSTDERR:`n$errText"
+      throw "pip install for Safe MCP failed with exit code $pipExitCode.`nSTDERR:`n$errText"
     }
   }
   finally {
