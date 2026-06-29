@@ -71,6 +71,8 @@ Example reports in `examples/` use synthetic Quest 3-like data. The private exam
 - [Methods and inference limits](docs/METHODS.md)
 - [HTML export reports](docs/EXPORT_REPORTS.md)
 - [Public sharing guide](docs/PUBLIC_SHARING.md)
+- [Safe MCP and CI](docs/SAFE_MCP_CI.md)
+- [Control MCP (state-changing, two-phase confirm)](docs/CONTROL_MCP.md)
 - [Development and rebuild workflow](docs/DEVELOPMENT.md)
 - [Self-review checklist](docs/SELF_REVIEW.md)
 - [Release notes](docs/RELEASE_NOTES.md)

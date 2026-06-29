@@ -19,8 +19,14 @@ jobs:
       - name: Compile safe MCP server
         run: python -m py_compile mcp/quest_adb_safe_mcp.py
 
+      - name: Compile control MCP server
+        run: python -m py_compile mcp/quest_adb_control_mcp.py
+
       - name: Safe MCP policy tests
         run: python -m unittest tests.test_safe_mcp_policy
+
+      - name: Control MCP policy tests
+        run: python -m unittest tests.test_control_mcp_policy
 
       - name: Safe MCP protocol smoke
         shell: pwsh

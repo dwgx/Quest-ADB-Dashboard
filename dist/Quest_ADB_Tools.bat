@@ -389,6 +389,8 @@ exit /b 0
 :menu
 mode con: cols=100 lines=34 >nul 2>nul
 call :print_header
+echo [AI Agent] MCP: mcp\quest_adb_control_mcp.py (control, two-phase confirm) + mcp\quest_adb_safe_mcp.py (read-only). Skill: quest-control. Docs: docs\CONTROL_MCP.md
+echo.
 call :write_b64 "6I+c5Y2V77yaDQogIFtXXSDlkK/liqggV2ViVUkg5o6n5Yi26Z2i5p2/ICAgICAgIFtIXSDluK7liqkgLyDpo47pmanmj5DnpLoNCiAgW0ZdIEFEQiDoh6rmo4AgLyDmiavmj4/nm67lvZUgICAgICAgW1RdIOiviuaWrei/nuaOpSAvIEFEQg0KICBbMV0g5p+l55yL5Y+q6K+754q25oCBICAgICAgICAgICAgICBbUl0g5p+l55yL55u45YWzIHNldHRpbmdzDQogIFtTXSDph43lkK/nlLXohJHnq68gQURCIOacjeWKoSAgICAgICBbTV0g5q+PIDUg56eS55uR5o6n54q25oCBDQogIFtQXSDlronlhajnhoTlsY8gICAgICAgICAgICAgICAgICBbNl0g5oGi5aSN5L+d5a6I6buY6K6k5YC8DQogIFtLXSDnn63mnJ/kv53mtLsgLyDosIPor5XmqKHlvI8gICAgICAgW0xdIOWPquivuyBrZWVwYWxpdmUg55uR5o6nDQogIFs3XSDlvIDlkK/ml6Dnur8gQURCICAgICAgICAgICAgICBbOF0g5YWz6Zet5peg57q/IEFEQg0KICBbOV0g5LuO5aSH5Lu95oGi5aSN6K6+572uICAgICAgICAgICAgW1FdIOmAgOWHug0K"
 set "CHOICE="
 call :write_b64 "6K+36YCJ5oup77ya"
