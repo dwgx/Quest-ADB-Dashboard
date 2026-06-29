@@ -107,6 +107,20 @@ class ControlMcpPolicyTests(unittest.TestCase):
         self.assertTrue(module._is_confirmed("YES"))
         self.assertFalse(module._is_confirmed(False))
 
+    def test_exec_out_metacharacters_are_refused(self):
+        # exec-out also runs on the device via sh; a planted screenshot filename
+        # like `$(reboot).png` must not slip through the exec-out path.
+        for path in [
+            "/sdcard/Oculus/Screenshots/$(reboot).png",
+            "/sdcard/Oculus/Screenshots/`reboot`.png",
+            "/sdcard/x;reboot.png",
+        ]:
+            with self.subTest(path=path):
+                assert_blocked(["-s", "SERIAL", "exec-out", "cat", path])
+
+    def test_exec_out_clean_path_is_allowed(self):
+        assert_allowed(["-s", "SERIAL", "exec-out", "cat", "/sdcard/Oculus/Screenshots/IMG_001.png"])
+
     def test_cmd_alias_destructive_forms_are_blocked(self):
         for command in [
             "cmd package uninstall com.example.app",

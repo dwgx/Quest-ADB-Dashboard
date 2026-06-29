@@ -34,10 +34,17 @@ The **HTML export path is read-only**. It uses public ADB reads such as:
 
 The broader WebUI and BAT menu also contain interactive convenience actions for sleep, wake, keep-awake, wireless ADB, restore, and custom settings. Those actions are separate from export and can change headset state. Use them only when you understand the effect.
 
-The optional MCP server is stricter than the WebUI. It exposes only read-only
-ADB inventory tools and has no generic shell, install, uninstall, push, pull,
-reboot, wireless ADB, settings write, input, or broadcast tool. See
+The project ships two MCP servers. The default one is read-only: it exposes
+only ADB inventory tools and has no generic shell, install, uninstall, push,
+pull, reboot, wireless ADB, settings write, input, or broadcast tool. See
 [Safe MCP and CI](docs/SAFE_MCP_CI.md).
+
+A separate, opt-in control server (`mcp/quest_adb_control_mcp.py`) can change
+device state (screenshot, key events, tap/swipe/text, launch app, wake/sleep).
+Every state-changing tool is two-phase: it previews the exact adb command and
+touches nothing until you confirm, and it hard-blocks irreversible families
+(install/uninstall/reboot/factory-reset/...) even when confirmed. See
+[Control MCP](docs/CONTROL_MCP.md).
 
 ## Quick Start
 

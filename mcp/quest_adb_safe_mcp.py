@@ -300,9 +300,29 @@ def _shell_args(serial: str, command_key: str) -> list[str]:
 
 def _redact_share_safe(text: str) -> str:
     text = re.sub(r"([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}", "[REDACTED_MAC]", text)
-    text = re.sub(r"\b(?:10|172\.(?:1[6-9]|2[0-9]|3[0-1])|192\.168)\.\d{1,3}\.\d{1,3}\b", "[REDACTED_LAN_IP]", text)
-    text = re.sub(r"(?i)\b(serial|ro\.serialno|androidboot\.serialno|wifi_ssid|ssid|bssid)\b[=: ]+[^\r\n]+", r"\1=[REDACTED]", text)
-    text = re.sub(r"(?i)\b[A-Z0-9]{12,}\b", "[REDACTED_ID]", text)
+    # IPv6 (incl. compressed :: forms like fe80::1) — redact before IPv4.
+    text = re.sub(
+        r"\b(?:[0-9A-Fa-f]{1,4}:){1,7}:?(?:[0-9A-Fa-f]{1,4})?(?::[0-9A-Fa-f]{1,4})*\b"
+        r"|\b[0-9A-Fa-f]{1,4}::(?:[0-9A-Fa-f]{1,4}:?)*[0-9A-Fa-f]{0,4}\b",
+        "[REDACTED_IPV6]",
+        text,
+    )
+    # Redact ALL IPv4 addresses (private, CGNAT, public, link-local). A
+    # share-safe export should never carry any routable or local address;
+    # the previous RFC1918-only rule leaked public/CGNAT/IPv6 and the 10/8
+    # last octet. Redact the whole dotted quad.
+    text = re.sub(r"\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b", "[REDACTED_IP]", text)
+    # getprop format is `[ro.serialno]: [VALUE]`; the older `key=value` rule
+    # missed it. Redact the bracketed value for sensitive property keys.
+    text = re.sub(
+        r"(?im)^\[(ro\.serialno|ro\.boot\.serialno|androidboot\.serialno|gsm\.[^\]]*imei[^\]]*|persist\.[^\]]*serial[^\]]*)\]\s*:\s*\[[^\]]*\]",
+        r"[\1]: [REDACTED]",
+        text,
+    )
+    text = re.sub(r"(?i)\b(serial|ro\.serialno|androidboot\.serialno|wifi_ssid|ssid|bssid|imei)\b[=: ]+[^\r\n]+", r"\1=[REDACTED]", text)
+    # Catch-all for long opaque IDs (Quest serials are ~14 alnum). Lowered to
+    # 8 so shorter serials are not missed by the length heuristic.
+    text = re.sub(r"(?i)\b[A-Z0-9]{8,}\b", "[REDACTED_ID]", text)
     return text
 
 

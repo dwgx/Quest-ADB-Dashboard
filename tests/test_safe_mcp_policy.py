@@ -101,5 +101,26 @@ class SafeMcpPolicyTests(unittest.TestCase):
                 assert_allowed(["-s", "SERIAL", "shell", command])
 
 
+    def test_share_safe_redaction_covers_ip_serial_ipv6(self):
+        redact = module._redact_share_safe
+        secrets = {
+            "[ro.serialno]: [1PASH9BG0G0431]": "1PASH9BG0G0431",
+            "inet 10.42.0.137/24": "10.42.0.137",
+            "inet 192.168.1.5": "192.168.1.5",
+            "public 8.8.8.8 dns": "8.8.8.8",
+            "cgnat 100.64.3.9": "100.64.3.9",
+            "inet6 fe80::1234:5678:9abc:def0 scope link": "fe80",
+            "addr 2001:db8::ff00:42:8329": "2001:db8",
+        }
+        for line, secret in secrets.items():
+            with self.subTest(line=line):
+                self.assertNotIn(secret, redact(line))
+
+    def test_share_safe_redaction_keeps_benign_text(self):
+        redact = module._redact_share_safe
+        benign = "version 14 build PR1.0 model Quest_3"
+        self.assertEqual(redact(benign), benign)
+
+
 if __name__ == "__main__":
     unittest.main()

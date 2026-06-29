@@ -207,6 +207,16 @@ def _refuse_if_hard_blocked(argv: list[str]) -> None:
     if command_words and command_words[0] in BLOCKED_ADB_COMMANDS:
         raise ValueError(f"Hard-blocked state-changing ADB command: {rendered}")
 
+    # exec-out also runs its argument on the device via sh (just with raw
+    # binary stdout), so apply the same metacharacter refusal there. The
+    # screenshot pull (`exec-out cat <devicepath>`) interpolates a
+    # device-supplied filename, which is separately charset-validated.
+    if "exec-out" in args:
+        eo_index = args.index("exec-out")
+        eo_blob = " ".join(args[eo_index + 1 :])
+        if re.search(r"[;&|\n\r`$><]", eo_blob):
+            raise ValueError(f"Refusing exec-out command with chaining/substitution metacharacters: {rendered}")
+
     if "shell" not in args:
         return
     shell_index = args.index("shell")
@@ -455,6 +465,11 @@ def capture_screenshot(
         time.sleep(0.6)
         listing = _run_adb(["-s", serial_value, "shell", "ls", "-t", "/sdcard/Oculus/Screenshots/"], timeout_seconds=8)
         names = [n for n in listing.get("stdout", "").split() if n.lower().endswith((".png", ".jpg"))]
+        # Only accept simple, safe filenames. `newest` is device-supplied and is
+        # interpolated into an `exec-out cat <path>` that the device runs via sh,
+        # so a planted name like `$(reboot).png` would otherwise execute. The
+        # exec-out path does not pass through the shell metacharacter guard.
+        names = [n for n in names if re.fullmatch(r"[A-Za-z0-9._-]{1,128}", n)]
         fresh = [n for n in names if n not in before_set]
         if fresh:
             newest = fresh[0]
