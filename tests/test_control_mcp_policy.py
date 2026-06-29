@@ -51,6 +51,19 @@ def assert_allowed(args):
 
 
 class ControlMcpPolicyTests(unittest.TestCase):
+    def test_keyevent_accepts_short_and_full_forms(self):
+        # send_keyevent should accept both "HOME" and "KEYCODE_HOME" (the form
+        # adb uses and the one LLMs reach for first). Verified live on hardware.
+        for key in ["HOME", "KEYCODE_HOME", "keycode_home", "  Home  ", "VOLUME_UP", "KEYCODE_VOLUME_UP"]:
+            with self.subTest(key=key):
+                out = module.send_keyevent(key=key, serial="SERIAL", confirm=False)
+                # preview path: not whitelisted -> ok False with whitelist error
+                self.assertNotEqual(out.get("error", ""), f"key not in whitelist: {key}", key)
+        # a genuinely non-whitelisted key (e.g. POWER) must still be rejected
+        bad = module.send_keyevent(key="KEYCODE_POWER", serial="SERIAL", confirm=False)
+        self.assertFalse(bad.get("ok"))
+        self.assertIn("whitelist", bad.get("error", ""))
+
     def test_irreversible_adb_commands_are_blocked_even_with_serial(self):
         for args in [
             ["install", "app.apk"],

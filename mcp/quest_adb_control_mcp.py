@@ -497,7 +497,11 @@ def send_keyevent(key: str, serial: str | None = None, confirm: bool = False) ->
 
     Two-phase: confirm=False returns a preview only.
     """
+    # Accept both short ("HOME") and full ("KEYCODE_HOME") forms; the full
+    # form is what adb uses and what most callers/LLMs reach for first.
     key_upper = key.strip().upper()
+    if key_upper.startswith("KEYCODE_"):
+        key_upper = key_upper[len("KEYCODE_"):]
     if key_upper not in KEYEVENT_WHITELIST:
         return {"ok": False, "error": f"key not in whitelist: {key}", "allowed": sorted(KEYEVENT_WHITELIST)}
     selected = _select_device(serial)
