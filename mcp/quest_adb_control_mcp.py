@@ -26,20 +26,37 @@ Settings or the browser, not inside immersive VR scenes.
 
 from __future__ import annotations
 
+import io
 import os
 import re
 import shutil
 import subprocess
 import time
+import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Any
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server.fastmcp import FastMCP, Image
+from mcp.types import ToolAnnotations
 
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_SCREENSHOT_DIR = ROOT / "Quest_ADB_Logs" / "control-screenshots"
 MAX_OUTPUT_CHARS = 120_000
+
+# Longest edge (px) for the image returned inline to the agent. The full-res
+# file is always kept on disk; only the inline copy is downscaled so a single
+# screenshot cannot blow up the model's context window.
+INLINE_SCREENSHOT_MAX_EDGE = 1024
+
+# MCP tool annotations (spec rev 2025-03-26) are advisory hints clients use to
+# decide confirmation UX. They are NOT the enforcement layer: the real
+# guarantees here are the two-phase confirm, the hard-block policy, and the
+# metacharacter guards. Defaults in the spec are pessimistic (destructive,
+# non-read-only, open-world), so annotating is purely additive safety signal.
+READ_ONLY = ToolAnnotations(readOnlyHint=True, destructiveHint=False, idempotentHint=True, openWorldHint=False)
+# State-changing but reversible and safe to repeat (tap/keyevent/wake/sleep).
+REVERSIBLE = ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=False, openWorldHint=False)
 
 INSTRUCTIONS = (
     "Quest ADB control bridge for authorized local Quest devices. Every "
@@ -55,6 +72,20 @@ mcp = FastMCP("quest-adb-control", instructions=INSTRUCTIONS, log_level="ERROR")
 
 # --- shared adb discovery / device selection (mirrors quest_adb_safe_mcp) ---
 
+def _sdk_root_candidates() -> list[str]:
+    # Generic scan for platform-tools\adb.exe under common Android SDK roots on
+    # each available drive. Replaces an author-specific hardcoded path while
+    # staying discoverable on machines where adb is not on PATH.
+    found: list[str] = []
+    for drive in ("C:", "D:", "E:"):
+        if not Path(drive + "\\").exists():
+            continue
+        for sub in (r"\Software\Android\Sdk\platform-tools\adb.exe",
+                    r"\Android\Sdk\platform-tools\adb.exe"):
+            found.append(drive + sub)
+    return found
+
+
 def _find_adb() -> str:
     env_adb = os.environ.get("ADB_EXE")
     candidates = [
@@ -64,7 +95,7 @@ def _find_adb() -> str:
         str(ROOT / "platform-tools" / "adb.exe"),
         str(ROOT / "tools" / "adb.exe"),
         str(Path(os.environ.get("LOCALAPPDATA", "")) / "Android" / "Sdk" / "platform-tools" / "adb.exe"),
-        r"D:\Software\Android\Sdk\platform-tools\adb.exe",
+        *_sdk_root_candidates(),
         str(Path(os.environ.get("ProgramFiles", r"C:\Program Files")) / "Android" / "platform-tools" / "adb.exe"),
         str(Path(os.environ.get("ProgramFiles(x86)", r"C:\Program Files (x86)")) / "Android" / "platform-tools" / "adb.exe"),
         str(Path(os.environ.get("ProgramFiles", r"C:\Program Files")) / "SideQuest" / "resources" / "app.asar.unpacked" / "build" / "platform-tools" / "adb.exe"),
@@ -90,6 +121,13 @@ def _validate_serial(serial: str) -> str:
 
 
 # --- hard-block policy (applies even when confirm=True) ---
+#
+# SECURITY INVARIANT: No @mcp.tool must ever forward a caller-supplied
+# free-form shell/adb string. Every tool builds a fixed argv from validated
+# params. The hard-block denylist below is defense-in-depth for that
+# internally built argv, NOT the primary gate. If a future tool needs to
+# accept a shell string, this denylist model is insufficient -- switch to an
+# allowlist.
 
 BLOCKED_ADB_COMMANDS = {
     "install", "install-multiple", "install-multi-package",
@@ -335,6 +373,123 @@ def _is_awake(serial: str) -> bool:
         return False
 
 
+# --- perception helpers (read-only): let the agent "see" the screen ---
+
+def _list_displays(serial: str) -> list[dict[str, Any]]:
+    """Enumerate displays with id + resolution. Quest renders each 2D panel on
+    its own virtual display, so the agent must know which display to act on."""
+    displays: list[dict[str, Any]] = []
+    try:
+        res = _run_adb(["-s", serial, "shell", "dumpsys", "SurfaceFlinger", "--display-id"], timeout_seconds=8)
+        # lines like: Display 4630946882202380434 (HWC display 0): ... 4128x2208
+        for line in res.get("stdout", "").splitlines():
+            m = re.search(r"Display\s+(\d+)\s+\(.*?display\s+(\d+)\)", line)
+            if m:
+                displays.append({"display_token": m.group(1), "display_id": int(m.group(2)), "line": line.strip()})
+    except Exception:
+        pass
+    return displays
+
+
+def _focused_state(serial: str) -> dict[str, Any]:
+    """Return focused package/activity/display so the agent is grounded before
+    it taps. On Quest, global focus on display 0 is often null while a panel is
+    focused on its own virtual display, so report all non-null focus windows."""
+    state: dict[str, Any] = {"focused_windows": []}
+    try:
+        res = _run_adb(["-s", serial, "shell", "dumpsys", "window", "displays"], timeout_seconds=8)
+        out = res.get("stdout", "")
+        cur_display = None
+        for line in out.splitlines():
+            dm = re.search(r"Display:\s+mDisplayId=(\d+)", line)
+            if dm:
+                cur_display = int(dm.group(1))
+            fm = re.search(r"mCurrentFocus=Window\{[^ ]+ \S+ (\S+)\}", line)
+            if fm and "null" not in line:
+                state["focused_windows"].append({"display_id": cur_display, "window": fm.group(1)})
+    except Exception:
+        pass
+    try:
+        act = _run_adb(["-s", serial, "shell", "dumpsys", "activity", "activities"], timeout_seconds=8)
+        rm = re.search(r"(?:topResumedActivity|ResumedActivity).*?(\S+/\S+)", act.get("stdout", ""))
+        if rm:
+            state["resumed_activity"] = rm.group(1).rstrip("}")
+    except Exception:
+        pass
+    return state
+
+
+_BOUNDS_RE = re.compile(r"\[(-?\d+),(-?\d+)\]\[(-?\d+),(-?\d+)\]")
+
+
+def _parse_ui_nodes(xml_text: str, max_nodes: int = 80) -> list[dict[str, Any]]:
+    """Parse a uiautomator hierarchy XML into a compact, token-frugal list of
+    interactable elements with server-computed tap centers. Mirrors the
+    mobile-mcp/AutoDroid filter: keep only nodes that carry text/desc/id or are
+    clickable, drop zero-size rects, and emit a flat list with stable ids."""
+    try:
+        # uiautomator brackets the XML with noise: a possible leading
+        # "UI hierarchy dumped..." line and a trailing one appended AFTER
+        # </hierarchy>. Slice to the XML declaration and to the closing tag so
+        # ElementTree doesn't choke on "junk after document element".
+        start = xml_text.find("<?xml")
+        if start < 0:
+            start = xml_text.find("<hierarchy")
+        end = xml_text.rfind("</hierarchy>")
+        if start < 0 or end < 0:
+            return []
+        root = ET.fromstring(xml_text[start:end + len("</hierarchy>")])
+    except ET.ParseError:
+        return []
+    nodes: list[dict[str, Any]] = []
+    for el in root.iter("node"):
+        text = (el.get("text") or "").strip()
+        desc = (el.get("content-desc") or "").strip()
+        rid = (el.get("resource-id") or "").strip()
+        clickable = el.get("clickable") == "true"
+        if not (text or desc or (rid and clickable) or clickable):
+            continue
+        m = _BOUNDS_RE.fullmatch(el.get("bounds", "") or "")
+        if not m:
+            continue
+        l, t, r, b = (int(g) for g in m.groups())
+        if r - l <= 0 or b - t <= 0:
+            continue
+        nodes.append({
+            "id": len(nodes),
+            "text": text[:80],
+            "desc": desc[:80],
+            "resource_id": rid.split("/")[-1][:48],
+            "clickable": clickable,
+            "bounds": [l, t, r, b],
+            "center": [(l + r) // 2, (t + b) // 2],
+        })
+        if len(nodes) >= max_nodes:
+            break
+    return nodes
+
+
+def _uiautomator_dump(serial: str) -> str:
+    """Dump the focused window's UI hierarchy as XML via exec-out (no on-device
+    file). Retries because uiautomator can transiently return a null root."""
+    for _ in range(6):
+        try:
+            data = _run_adb_binary(["-s", serial, "exec-out", "uiautomator", "dump", "/dev/tty"], timeout_seconds=12)
+        except Exception:
+            time.sleep(0.4)
+            continue
+        text = data.decode("utf-8", "replace")
+        if "<?xml" in text and "<hierarchy" in text:
+            return text
+        time.sleep(0.4)
+    return ""
+
+
+# in-process cache of the last observed elements, keyed by serial, so
+# tap_element(id) can resolve an id to its server-computed center.
+_LAST_OBSERVATION: dict[str, list[dict[str, Any]]] = {}
+
+
 # --- two-phase confirmation helper ---
 
 def _is_confirmed(confirm: Any) -> bool:
@@ -392,7 +547,7 @@ KEYEVENT_WHITELIST = {
 }
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY)
 def control_policy() -> dict[str, Any]:
     """Return this control server's safety policy and capability boundary."""
     return {
@@ -403,10 +558,18 @@ def control_policy() -> dict[str, Any]:
         "hard_blocked_intent_actions": list(BLOCKED_INTENT_ACTIONS),
         "shell_metacharacters_refused": "; & | newline $ ` < > and ${ are refused so free text cannot chain a second device command",
         "keyevent_whitelist": sorted(KEYEVENT_WHITELIST),
+        "perception": (
+            "observe_screen (read-only) reports focused window/activity, the display list, and a flat list "
+            "of interactable elements (text/desc/bounds/center) parsed from uiautomator. Use it before tapping, "
+            "then tap_element(id) or tap(x,y,display_id=...). Falls back to capture_screenshot for surfaces with no hierarchy."
+        ),
         "capability_boundary": [
-            "Can: native screenshot, whitelisted keyevents, tap/swipe/text on 2D system panels, launch apps, wake/sleep.",
+            "Can: native screenshot (returned inline as an image), whitelisted keyevents, observe_screen perception, "
+            "tap/swipe/tap_element on 2D system panels, text input, launch apps, wake/sleep.",
             "Cannot: emulate 6DoF VR controllers (laser + trigger) - controllers are Bluetooth HID, not in /dev/input.",
-            "Coordinate taps only affect 2D system surfaces (Settings, browser), not immersive VR scenes.",
+            "Quest renders each 2D panel on its own virtual display. A plain tap hits the default display (0), which is the "
+            "empty composited buffer; target the panel's display_id with display-local coordinates (verified: input -d works, "
+            "but driving a panel requires the correct display + local coords). Immersive VR scenes are not tappable.",
             "Screenshot requires the headset to be awake/worn; an asleep headset produces no image.",
         ],
         "never_exposed": "No install/uninstall/reboot/tcpip/usb/push/pull/pm clear-disable/factory-reset tool exists here.",
@@ -414,7 +577,7 @@ def control_policy() -> dict[str, Any]:
     }
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY)
 def list_devices() -> dict[str, Any]:
     """List ADB devices with transport state. Read-only."""
     try:
@@ -424,16 +587,95 @@ def list_devices() -> dict[str, Any]:
         return {"ok": False, "error": str(exc)}
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY)
+def observe_screen(serial: str | None = None, include_elements: bool = True) -> dict[str, Any]:
+    """Perceive the current screen so you can decide what to tap. Read-only.
+
+    Returns grounding context plus a flat list of interactable UI elements with
+    server-computed tap centers, so a screenshot->reason->tap loop can run
+    without guessing coordinates:
+
+      {
+        "ok": true,
+        "focused": {"focused_windows": [{"display_id": 0, "window": "..."}],
+                    "resumed_activity": "pkg/.Activity"},
+        "displays": [{"display_id": 0, ...}],   # Quest panels live on their own display
+        "elements": [{"id": 3, "text": "Wi-Fi", "desc": "", "resource_id": "...",
+                      "clickable": true, "bounds": [l,t,r,b], "center": [x,y]}],
+        "element_source": "uiautomator" | "none"
+      }
+
+    Pass an element id to tap_element(id, confirm=True) to act on it. If
+    "elements" is empty (immersive VR or custom-drawn surfaces have no
+    hierarchy), fall back to capture_screenshot and reason over the image.
+    """
+    selected = _select_device(serial)
+    if not selected.get("ok"):
+        return selected
+    serial_value = selected["device"]["serial"]
+    observation: dict[str, Any] = {
+        "ok": True,
+        "device": selected["device"],
+        "focused": _focused_state(serial_value),
+        "displays": _list_displays(serial_value),
+        "elements": [],
+        "element_source": "none",
+    }
+    if include_elements:
+        xml_text = _uiautomator_dump(serial_value)
+        if xml_text:
+            elements = _parse_ui_nodes(xml_text)
+            observation["elements"] = elements
+            observation["element_source"] = "uiautomator" if elements else "none"
+            _LAST_OBSERVATION[serial_value] = elements
+        else:
+            observation["hint"] = (
+                "No UI hierarchy available (immersive VR scene or custom surface). "
+                "Use capture_screenshot and reason over the image instead."
+            )
+    return observation
+
+
+def _downscale_for_inline(data: bytes) -> tuple[bytes, str, dict[str, Any]]:
+    """Return a context-friendly inline copy of a screenshot: downscale the
+    longest edge to INLINE_SCREENSHOT_MAX_EDGE and JPEG-encode. Falls back to
+    the original bytes if Pillow is unavailable. The full-res file on disk is
+    untouched; only this inline copy is shrunk to protect the context window."""
+    try:
+        from PIL import Image as PILImage
+    except Exception:
+        return data, "png", {"inline_downscaled": False, "reason": "Pillow not installed"}
+    try:
+        im = PILImage.open(io.BytesIO(data))
+        orig = im.size
+        im = im.convert("RGB")
+        longest = max(im.size)
+        if longest > INLINE_SCREENSHOT_MAX_EDGE:
+            scale = INLINE_SCREENSHOT_MAX_EDGE / longest
+            im = im.resize((max(1, int(im.width * scale)), max(1, int(im.height * scale))))
+        buf = io.BytesIO()
+        im.save(buf, format="JPEG", quality=70)
+        return buf.getvalue(), "jpeg", {"inline_downscaled": True, "original_size": list(orig), "inline_size": list(im.size)}
+    except Exception as exc:
+        return data, "png", {"inline_downscaled": False, "reason": str(exc)[:120]}
+
+
+@mcp.tool(annotations=REVERSIBLE)
 def capture_screenshot(
     serial: str | None = None,
     output_dir: str | None = None,
+    return_image: bool = True,
     confirm: bool = False,
-) -> dict[str, Any]:
+) -> Any:
     """Trigger a native Quest screenshot and pull it to the local workspace.
 
     Two-phase: confirm=False returns a preview only. Requires the headset to be
     awake; an asleep/unworn headset will not produce an image.
+
+    On confirm=True, returns the screenshot inline (downscaled JPEG image
+    content) so you can actually see the screen and decide the next action,
+    alongside a text record with the full-resolution local_path and device_path.
+    Set return_image=False to skip the inline image and get only the metadata.
     """
     selected = _select_device(serial)
     if not selected.get("ok"):
@@ -484,14 +726,20 @@ def capture_screenshot(
     local_path = out_root / newest
     data = _run_adb_binary(["-s", serial_value, "exec-out", "cat", f"/sdcard/Oculus/Screenshots/{newest}"], timeout_seconds=30)
     local_path.write_bytes(data)
-    return {
+    record = {
         "ok": True, "executed": True, "device": selected["device"],
         "device_path": f"/sdcard/Oculus/Screenshots/{newest}",
         "local_path": str(local_path), "bytes": len(data),
     }
+    if not return_image:
+        return record
+    inline, fmt, meta = _downscale_for_inline(data)
+    record.update(meta)
+    # Mixed return: the agent sees the image AND gets the structured record.
+    return [Image(data=inline, format=fmt), record]
 
 
-@mcp.tool()
+@mcp.tool(annotations=REVERSIBLE)
 def send_keyevent(key: str, serial: str | None = None, confirm: bool = False) -> dict[str, Any]:
     """Send one whitelisted Android key event (HOME/BACK/DPAD/VOLUME/MEDIA/...).
 
@@ -517,9 +765,15 @@ def send_keyevent(key: str, serial: str | None = None, confirm: bool = False) ->
     return {"ok": result["exit_code"] == 0, "executed": True, "key": keycode, "result": result, "device": selected["device"]}
 
 
-@mcp.tool()
-def tap(x: int, y: int, serial: str | None = None, confirm: bool = False) -> dict[str, Any]:
+@mcp.tool(annotations=REVERSIBLE)
+def tap(x: int, y: int, display_id: int | None = None, serial: str | None = None, confirm: bool = False) -> dict[str, Any]:
     """Tap at (x, y). Only meaningful on 2D system panels, not VR scenes.
+
+    On Quest, each 2D panel renders on its own virtual display. If a tap seems
+    to do nothing, call observe_screen first: act on the display_id its
+    "focused" / "displays" report, and pass coordinates LOCAL to that display
+    (origin 0,0 at the panel's top-left). Without display_id the tap goes to the
+    default display (0), which on Quest is the empty composited buffer.
 
     Two-phase: confirm=False returns a preview only.
     """
@@ -529,18 +783,46 @@ def tap(x: int, y: int, serial: str | None = None, confirm: bool = False) -> dic
     if not selected.get("ok"):
         return selected
     serial_value = selected["device"]["serial"]
-    argv = ["-s", serial_value, "shell", "input", "tap", str(int(x)), str(int(y))]
+    disp = ["-d", str(int(display_id))] if display_id is not None else []
+    argv = ["-s", serial_value, "shell", "input", *disp, "tap", str(int(x)), str(int(y))]
     if not _is_confirmed(confirm):
-        return _preview("tap", argv, f"Injects a tap at ({int(x)},{int(y)}) on the 2D input layer.",
+        return _preview("tap", argv, f"Injects a tap at ({int(x)},{int(y)})"
+                        + (f" on display {int(display_id)}" if display_id is not None else " on the default display"),
                         {"device": selected["device"]})
     result = _run_adb(argv, timeout_seconds=8)
     return {"ok": result["exit_code"] == 0, "executed": True, "result": result, "device": selected["device"]}
 
 
-@mcp.tool()
+@mcp.tool(annotations=REVERSIBLE)
+def tap_element(element_id: int, serial: str | None = None, confirm: bool = False) -> dict[str, Any]:
+    """Tap a UI element by its id from the most recent observe_screen call.
+
+    Resolves the element's server-computed center so you never compute pixel
+    coordinates yourself. Call observe_screen first to populate the element
+    list, then tap_element(element_id, confirm=True).
+
+    Two-phase: confirm=False returns a preview only.
+    """
+    selected = _select_device(serial)
+    if not selected.get("ok"):
+        return selected
+    serial_value = selected["device"]["serial"]
+    elements = _LAST_OBSERVATION.get(serial_value, [])
+    match = next((e for e in elements if e["id"] == int(element_id)), None)
+    if match is None:
+        return {"ok": False, "error": f"element id {element_id} not found; call observe_screen first to refresh the element list",
+                "available_ids": [e["id"] for e in elements]}
+    cx, cy = match["center"]
+    return tap(cx, cy, serial=serial_value, confirm=confirm)
+
+
+@mcp.tool(annotations=REVERSIBLE)
 def swipe(x1: int, y1: int, x2: int, y2: int, duration_ms: int = 300,
-          serial: str | None = None, confirm: bool = False) -> dict[str, Any]:
+          display_id: int | None = None, serial: str | None = None, confirm: bool = False) -> dict[str, Any]:
     """Swipe from (x1,y1) to (x2,y2). 2D system panels only.
+
+    Like tap, accepts an optional display_id to target a specific Quest panel
+    display with display-local coordinates.
 
     Two-phase: confirm=False returns a preview only.
     """
@@ -552,7 +834,8 @@ def swipe(x1: int, y1: int, x2: int, y2: int, duration_ms: int = 300,
     if not selected.get("ok"):
         return selected
     serial_value = selected["device"]["serial"]
-    argv = ["-s", serial_value, "shell", "input", "swipe", str(int(x1)), str(int(y1)), str(int(x2)), str(int(y2)), str(dur)]
+    disp = ["-d", str(int(display_id))] if display_id is not None else []
+    argv = ["-s", serial_value, "shell", "input", *disp, "swipe", str(int(x1)), str(int(y1)), str(int(x2)), str(int(y2)), str(dur)]
     if not _is_confirmed(confirm):
         return _preview("swipe", argv, f"Injects a swipe ({x1},{y1})->({x2},{y2}) over {dur}ms.",
                         {"device": selected["device"]})
@@ -560,7 +843,7 @@ def swipe(x1: int, y1: int, x2: int, y2: int, duration_ms: int = 300,
     return {"ok": result["exit_code"] == 0, "executed": True, "result": result, "device": selected["device"]}
 
 
-@mcp.tool()
+@mcp.tool(annotations=REVERSIBLE)
 def input_text(text: str, serial: str | None = None, confirm: bool = False) -> dict[str, Any]:
     """Type text into the currently focused 2D field.
 
@@ -575,6 +858,10 @@ def input_text(text: str, serial: str | None = None, confirm: bool = False) -> d
     # primary guard for this tool (the global guard in _run_adb backs it up).
     if re.search(r"[;&|`$><]", text) or "${" in text:
         return {"ok": False, "error": "text contains shell metacharacters (; & | ` $ < >); refused"}
+    # A bare `%` collides with `adb shell input text` own %s escaping (used for
+    # spaces below), producing malformed/ambiguous input; refuse it outright.
+    if "%" in text:
+        return {"ok": False, "error": "text contains '%' which conflicts with input-text escaping; refused"}
     selected = _select_device(serial)
     if not selected.get("ok"):
         return selected
@@ -589,7 +876,7 @@ def input_text(text: str, serial: str | None = None, confirm: bool = False) -> d
     return {"ok": result["exit_code"] == 0, "executed": True, "result": result, "device": selected["device"]}
 
 
-@mcp.tool()
+@mcp.tool(annotations=REVERSIBLE)
 def launch_app(package: str, serial: str | None = None, confirm: bool = False) -> dict[str, Any]:
     """Launch an app by package via its monkey launch intent.
 
@@ -610,7 +897,7 @@ def launch_app(package: str, serial: str | None = None, confirm: bool = False) -
     return {"ok": result["exit_code"] == 0, "executed": True, "package": package, "result": result, "device": selected["device"]}
 
 
-@mcp.tool()
+@mcp.tool(annotations=REVERSIBLE)
 def wake_headset(serial: str | None = None, confirm: bool = False) -> dict[str, Any]:
     """Wake the headset display (KEYCODE_WAKEUP). Needed before screenshots.
 
@@ -619,7 +906,7 @@ def wake_headset(serial: str | None = None, confirm: bool = False) -> dict[str, 
     return send_keyevent("WAKEUP", serial=serial, confirm=confirm)
 
 
-@mcp.tool()
+@mcp.tool(annotations=REVERSIBLE)
 def sleep_headset(serial: str | None = None, confirm: bool = False) -> dict[str, Any]:
     """Put the headset display to sleep (KEYCODE_SLEEP).
 

@@ -5,37 +5,312 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Quest ADB 控制台</title>
 <style>
-:root{--bg:#f5f7fb;--side:#fff;--card:#fff;--soft:#f8fafc;--line:#e2e8f0;--text:#111827;--muted:#64748b;--blue:#2563eb;--green:#16a34a;--amber:#d97706;--red:#e11d48;--nav:236px;--radius:8px}
-body.dark{--bg:#0f141c;--side:#111821;--card:#151d28;--soft:#111822;--line:#263244;--text:#e5edf7;--muted:#94a3b8}
-*{box-sizing:border-box}html,body{margin:0;min-height:100%;font-family:"Segoe UI","Microsoft YaHei",Arial,sans-serif;background:var(--bg);color:var(--text);font-size:14px;letter-spacing:0}button,input,select{font:inherit}
-.app{min-height:100vh;display:grid;grid-template-columns:var(--nav) 1fr;background:var(--bg)}.side{position:fixed;inset:0 auto 0 0;width:var(--nav);height:100vh;background:var(--side);border-right:1px solid var(--line);display:flex;flex-direction:column}.brand{height:76px;display:flex;align-items:center;gap:12px;padding:0 18px;border-bottom:1px solid var(--line)}.brandIcon{width:36px;height:36px;border-radius:8px;background:var(--blue);display:grid;place-items:center;color:white}.brand b{display:block;font-size:16px}.brand span{display:block;margin-top:3px;color:var(--muted);font-size:12px}.brandIcon svg,.nav svg,.deviceIcon svg{fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
-.nav{display:grid;gap:4px;padding:12px}.nav a{height:38px;border-radius:7px;display:flex;align-items:center;gap:10px;padding:0 12px;color:var(--muted);text-decoration:none;font-weight:700}.nav a svg{width:18px;height:18px}.nav a.active{background:rgba(37,99,235,.10);color:var(--blue)}
-.main{grid-column:2;min-width:0;min-height:100vh;background:var(--bg)}.top{height:76px;background:var(--card);border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;padding:0 24px;position:sticky;top:0;z-index:3}.title h1{margin:0;font-size:21px}.title p{margin:5px 0 0;color:var(--muted);font-size:13px}
-.toolbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end}.chip,.btn{height:34px;border:1px solid var(--line);background:var(--soft);color:var(--text);border-radius:7px;padding:0 11px;display:inline-flex;align-items:center;gap:7px;font-weight:700}.chipDot{width:8px;height:8px;border-radius:50%;background:var(--red)}.connected .chipDot{background:var(--green)}.btn{cursor:pointer}.btn.primary{background:var(--blue);border-color:var(--blue);color:white}.btn.ghost{background:transparent}
-.wrap{padding:18px 24px 32px;display:flex;flex-direction:column;gap:14px;max-width:1480px;min-height:calc(100vh - 76px);background:var(--bg)}.notice{border:1px solid rgba(217,119,6,.30);background:rgba(217,119,6,.07);color:#b36505;border-radius:8px;padding:10px 13px;font-weight:700;min-height:0;line-height:1.45}body.dark .notice{color:#f4c06a}.page{display:none}.page.active{display:grid;gap:14px}.row{display:grid;grid-template-columns:1fr 1fr;gap:14px}.row3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
-.card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden}.head{height:44px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;padding:0 14px}.head h2{margin:0;font-size:15px}.tag{height:24px;display:inline-flex;align-items:center;border:1px solid var(--line);background:var(--soft);border-radius:999px;padding:0 9px;color:var(--muted);font-size:12px}.body{padding:14px}
-.deviceStrip{display:grid;grid-template-columns:70px 1fr auto;gap:14px;align-items:center}.deviceIcon{width:70px;height:70px;border-radius:12px;display:grid;place-items:center;background:rgba(37,99,235,.10);color:var(--blue)}.deviceIcon svg{width:44px;height:44px}.deviceName{font-size:20px;font-weight:800}.hint{margin-top:7px;color:var(--muted);line-height:1.55}.state{font-size:26px;font-weight:900;color:var(--red)}.state.good{color:var(--green)}.rig{display:grid;grid-template-columns:1fr 1.4fr 1fr;gap:12px;align-items:center;margin-top:14px}.controllerBox{min-height:78px;border:1px solid var(--line);border-radius:8px;background:var(--soft);padding:10px 12px;display:grid;align-content:center;gap:6px}.controllerBox .role{color:var(--muted);font-size:12px}.controllerBox b{font-size:20px}.controllerBox .stateText{font-size:12px;color:var(--muted)}.controllerBox.left{text-align:left;border-left:3px solid var(--blue)}.controllerBox.right{text-align:right;border-right:3px solid var(--blue)}.headsetBox{min-height:90px;border:1px solid var(--line);border-radius:10px;background:linear-gradient(180deg,rgba(37,99,235,.10),var(--soft));display:grid;grid-template-columns:64px 1fr;gap:12px;align-items:center;padding:12px}
-.deviceMeta{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:13px}.metaItem{height:52px;border:1px solid var(--line);border-radius:7px;background:var(--soft);padding:9px 12px}.metaItem span{display:block;color:var(--muted);font-size:12px}.metaItem b{display:block;margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.metricGrid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.metric{height:112px;border:1px solid var(--line);border-radius:8px;background:var(--soft);padding:12px;display:grid;grid-template-columns:68px 1fr;align-items:center;gap:10px}.metric svg.ring{width:68px;height:68px;transform:rotate(-90deg)}.track{fill:none;stroke:rgba(148,163,184,.25);stroke-width:8}.meter{fill:none;stroke:var(--blue);stroke-width:8;stroke-linecap:round}.metric.green .meter{stroke:var(--green)}.metric.amber .meter{stroke:var(--amber)}.metric.red .meter{stroke:var(--red)}.metricValue{font-size:23px;font-weight:900;white-space:nowrap}.metricLabel{margin-top:6px;color:var(--muted);font-size:12px}
-.miniGrid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}.mini{border:1px solid var(--line);border-radius:8px;background:var(--soft);padding:11px}.mini span{display:block;color:var(--muted);font-size:12px}.mini b{display:block;margin-top:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.infoGrid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.infoTile{border:1px solid var(--line);border-radius:8px;background:var(--soft);padding:11px;min-height:58px}.infoTile span{display:block;color:var(--muted);font-size:12px}.infoTile b{display:block;margin-top:5px;word-break:break-word}.exportBox{display:grid;grid-template-columns:1fr auto;gap:12px;align-items:center;border:1px solid rgba(37,99,235,.35);background:rgba(37,99,235,.08);border-radius:8px;padding:13px}.exportLinks{display:grid;gap:8px}.exportLinks a{color:var(--blue);font-weight:900;word-break:break-all}.table{width:100%;border-collapse:collapse}.table td{border-bottom:1px solid var(--line);padding:9px 0;color:var(--muted);vertical-align:top}.table tr:last-child td{border-bottom:0}.table td:last-child{text-align:right;color:var(--text);font-weight:700;word-break:break-word}
-.cmdGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.cmd{height:58px;border:1px solid var(--line);border-left:3px solid var(--line);background:var(--soft);border-radius:7px;text-align:left;padding:9px 11px;color:var(--text);cursor:pointer}.cmd b{display:block}.cmd span{display:block;margin-top:4px;color:var(--muted);font-size:12px}.cmd.blue{border-left-color:var(--blue)}.cmd.green{border-left-color:var(--green)}.cmd.amber{border-left-color:var(--amber)}.cmd.red{border-left-color:var(--red)}
-.form{display:grid;grid-template-columns:130px 1fr 1fr 82px;gap:9px}input,select{height:36px;border:1px solid var(--line);border-radius:7px;background:var(--soft);color:var(--text);padding:0 10px}.log{white-space:pre-wrap;min-height:80px;color:var(--muted);font-family:Consolas,"Microsoft YaHei",monospace;line-height:1.55}
-.toasts{position:fixed;right:22px;bottom:22px;z-index:30;display:flex;flex-direction:column-reverse;gap:10px;width:min(390px,calc(100vw - 28px));pointer-events:none}.toast{border:1px solid var(--line);border-left:4px solid var(--blue);background:var(--card);box-shadow:0 16px 38px rgba(15,23,42,.20);border-radius:8px;padding:11px 12px;opacity:0;transform:translateX(24px) translateY(10px) scale(.98);transition:opacity .22s ease,transform .22s cubic-bezier(.2,.8,.2,1);color:var(--text);pointer-events:auto}.toast.show{opacity:1;transform:translateX(0) translateY(0) scale(1)}.toast b{display:block;margin-bottom:4px}.toast span{display:block;color:var(--muted);line-height:1.45;word-break:break-word}.toast.ok{border-left-color:var(--green)}.toast.err{border-left-color:var(--red)}.toast.warn{border-left-color:var(--amber)}.paramList{display:grid;gap:10px}.paramItem{display:grid;grid-template-columns:1.2fr .8fr .8fr auto;gap:10px;align-items:center;border:1px solid var(--line);background:var(--soft);border-radius:8px;padding:10px 12px}.paramName b{display:block}.paramName span,.paramValue span{display:block;color:var(--muted);font-size:12px;margin-top:3px}.paramValue b{display:block;word-break:break-word}.paramState{height:26px;border:1px solid var(--line);border-radius:999px;display:inline-flex;align-items:center;justify-content:center;padding:0 10px;font-weight:800;font-size:12px}.paramItem.changed{border-color:rgba(217,119,6,.45);background:rgba(217,119,6,.06)}.paramItem.changed .paramState{border-color:rgba(217,119,6,.45);color:var(--amber);background:rgba(217,119,6,.08)}.paramItem.ok .paramState{border-color:rgba(22,163,74,.35);color:var(--green);background:rgba(22,163,74,.08)}.resetBtn{height:30px;border-radius:7px;border:1px solid var(--line);background:var(--card);color:var(--text);font-weight:800;padding:0 10px;cursor:pointer}.resetBtn.primary{border-color:rgba(37,99,235,.45);color:var(--blue)}.modalMask{position:fixed;inset:0;background:rgba(2,6,23,.56);z-index:40;display:none;place-items:center;padding:18px}.modalMask.show{display:grid}.modal{width:min(460px,100%);background:var(--card);border:1px solid var(--line);border-radius:10px;box-shadow:0 24px 70px rgba(0,0,0,.35);padding:18px}.modal h3{margin:0 0 8px;font-size:18px}.modal p{margin:0;color:var(--muted);line-height:1.65}.modalActions{display:flex;justify-content:flex-end;gap:10px;margin-top:18px}.modalActions button{height:34px;border-radius:7px;border:1px solid var(--line);background:var(--soft);color:var(--text);padding:0 13px;font-weight:800;cursor:pointer}.modalActions .danger{background:var(--amber);border-color:var(--amber);color:#111827}.cmd.is-busy,.btn.is-busy{opacity:.68;cursor:wait}.cmd:disabled,.btn:disabled,.resetBtn:disabled{pointer-events:none}
-@media(max-width:1180px){.row,.row3{grid-template-columns:1fr}.infoGrid{grid-template-columns:1fr 1fr}}@media(max-width:820px){.app{grid-template-columns:1fr}.side{position:static;width:auto;height:auto}.main{grid-column:1}.top{position:static;height:auto;align-items:flex-start;flex-direction:column;padding:16px}.wrap{padding:14px}.metricGrid,.miniGrid,.cmdGrid,.form,.paramItem,.infoGrid,.exportBox{grid-template-columns:1fr}.toasts{right:14px;bottom:14px}}
+:root{--bg:#eef1f7;--side:#fff;--card:#fff;--soft:#f5f7fb;--line:#e2e8f0;--text:#0f172a;--muted:#64748b;--blue:#2563eb;--blue2:#3b82f6;--green:#16a34a;--amber:#d97706;--red:#e11d48;--nav:244px;--radius:12px;--shadow:0 1px 2px rgba(15,23,42,.05),0 8px 24px rgba(15,23,42,.05)}
+body.dark{--bg:#0b0f16;--side:#0f1620;--card:#131b26;--soft:#0f1720;--line:#243044;--text:#e6edf7;--muted:#93a2b8;--shadow:0 1px 2px rgba(0,0,0,.3),0 12px 30px rgba(0,0,0,.35)}
+*{box-sizing:border-box}html,body{margin:0;min-height:100%;font-family:"Segoe UI","Microsoft YaHei",system-ui,Arial,sans-serif;background:var(--bg);color:var(--text);font-size:14px}
+button,input,select{font:inherit}
+.app{min-height:100vh;display:grid;grid-template-columns:var(--nav) 1fr}
+.side{position:fixed;inset:0 auto 0 0;width:var(--nav);height:100vh;background:var(--side);border-right:1px solid var(--line);display:flex;flex-direction:column;z-index:5}
+.brand{height:78px;display:flex;align-items:center;gap:12px;padding:0 20px;border-bottom:1px solid var(--line)}
+.brandIcon{width:38px;height:38px;border-radius:10px;background:linear-gradient(135deg,var(--blue),var(--blue2));display:grid;place-items:center;color:#fff;box-shadow:0 6px 16px rgba(37,99,235,.35)}
+.brand b{display:block;font-size:16px}.brand span{display:block;margin-top:3px;color:var(--muted);font-size:12px}
+.brandIcon svg,.nav svg,.deviceIcon svg,.drop svg{fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.nav{display:grid;gap:3px;padding:14px 12px;overflow:auto}
+.nav a{height:40px;border-radius:9px;display:flex;align-items:center;gap:11px;padding:0 13px;color:var(--muted);text-decoration:none;font-weight:700;transition:background .15s,color .15s}
+.nav a svg{width:18px;height:18px}.nav a:hover{background:rgba(148,163,184,.12);color:var(--text)}
+.nav a.active{background:rgba(37,99,235,.12);color:var(--blue)}
+.navFoot{margin-top:auto;padding:14px 18px;border-top:1px solid var(--line);color:var(--muted);font-size:12px;line-height:1.5}
+.main{grid-column:2;min-width:0;min-height:100vh}
+.top{height:78px;background:var(--card);border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;padding:0 26px;position:sticky;top:0;z-index:3}
+.title h1{margin:0;font-size:21px}.title p{margin:5px 0 0;color:var(--muted);font-size:13px}
+.toolbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+.chip,.btn{height:36px;border:1px solid var(--line);background:var(--soft);color:var(--text);border-radius:9px;padding:0 12px;display:inline-flex;align-items:center;gap:7px;font-weight:700}
+.chipDot{width:8px;height:8px;border-radius:50%;background:var(--red);box-shadow:0 0 0 3px rgba(225,29,72,.15)}
+.connected .chipDot{background:var(--green);box-shadow:0 0 0 3px rgba(22,163,74,.15)}
+.btn{cursor:pointer;transition:transform .08s,filter .15s}.btn:hover{filter:brightness(1.03)}.btn:active{transform:translateY(1px)}
+.btn.primary{background:var(--blue);border-color:var(--blue);color:#fff}.btn.ghost{background:transparent}
+.wrap{padding:20px 26px 40px;display:flex;flex-direction:column;gap:15px;max-width:1520px}
+.notice{border:1px solid rgba(217,119,6,.30);background:rgba(217,119,6,.07);color:#b36505;border-radius:10px;padding:11px 14px;font-weight:700;line-height:1.5}
+body.dark .notice{color:#f4c06a}
+.page{display:none}.page.active{display:grid;gap:15px}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:15px}.row3{display:grid;grid-template-columns:repeat(3,1fr);gap:15px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;box-shadow:var(--shadow)}
+.head{height:48px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;padding:0 16px}
+.head h2{margin:0;font-size:15px}.tag{height:25px;display:inline-flex;align-items:center;border:1px solid var(--line);background:var(--soft);border-radius:999px;padding:0 10px;color:var(--muted);font-size:12px}
+.body{padding:16px}
+.deviceIcon{width:70px;height:70px;border-radius:14px;display:grid;place-items:center;background:rgba(37,99,235,.10);color:var(--blue)}.deviceIcon svg{width:44px;height:44px}
+.headsetBox{display:grid;grid-template-columns:70px 1fr;gap:14px;align-items:center}
+.deviceName{font-size:22px;font-weight:800}.hint{margin-top:7px;color:var(--muted);line-height:1.55}
+.state{margin-top:8px;font-size:24px;font-weight:900;color:var(--red)}.state.good{color:var(--green)}
+.rig{display:grid;grid-template-columns:1fr 1.3fr 1fr;gap:12px;align-items:center;margin-top:16px}
+.controllerBox{min-height:78px;border:1px solid var(--line);border-radius:10px;background:var(--soft);padding:11px 13px;display:grid;align-content:center;gap:5px}
+.controllerBox .role{color:var(--muted);font-size:12px}.controllerBox b{font-size:20px}.controllerBox .stateText{font-size:12px;color:var(--muted)}
+.controllerBox.left{border-left:3px solid var(--blue)}.controllerBox.right{text-align:right;border-right:3px solid var(--blue)}
+.metaItem{border:1px solid var(--line);border-radius:9px;background:var(--soft);padding:10px 12px}.metaItem span{display:block;color:var(--muted);font-size:12px}.metaItem b{display:block;margin-top:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.metricGrid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.metric{height:116px;border:1px solid var(--line);border-radius:10px;background:var(--soft);padding:14px;display:grid;grid-template-columns:70px 1fr;align-items:center;gap:11px}
+.metric svg.ring{width:70px;height:70px;transform:rotate(-90deg)}.track{fill:none;stroke:rgba(148,163,184,.25);stroke-width:8}.meter{fill:none;stroke:var(--blue);stroke-width:8;stroke-linecap:round;transition:stroke-dasharray .5s ease}
+.metric.green .meter{stroke:var(--green)}.metric.amber .meter{stroke:var(--amber)}.metric.red .meter{stroke:var(--red)}
+.metricValue{font-size:23px;font-weight:900;white-space:nowrap}.metricLabel{margin-top:6px;color:var(--muted);font-size:12px}
+.infoGrid{display:grid;grid-template-columns:repeat(3,1fr);gap:11px}
+.infoTile{border:1px solid var(--line);border-radius:9px;background:var(--soft);padding:12px;min-height:60px}.infoTile span{display:block;color:var(--muted);font-size:12px}.infoTile b{display:block;margin-top:6px;word-break:break-word}
+.exportBox{display:grid;grid-template-columns:1fr auto;gap:14px;align-items:center;border:1px solid rgba(37,99,235,.35);background:rgba(37,99,235,.07);border-radius:10px;padding:14px}
+.exportLinks{display:grid;gap:8px}.exportLinks a{color:var(--blue);font-weight:900;word-break:break-all}
+.table{width:100%;border-collapse:collapse}.table td{border-bottom:1px solid var(--line);padding:10px 0;color:var(--muted);vertical-align:top}.table tr:last-child td{border-bottom:0}.table td:last-child{text-align:right;color:var(--text);font-weight:700;word-break:break-word}
+.cmdGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:11px}
+.cmd{min-height:60px;border:1px solid var(--line);border-left:3px solid var(--line);background:var(--soft);border-radius:9px;text-align:left;padding:11px 13px;color:var(--text);cursor:pointer;transition:transform .08s,filter .15s}.cmd:hover{filter:brightness(1.03)}.cmd:active{transform:translateY(1px)}
+.cmd b{display:block}.cmd span{display:block;margin-top:4px;color:var(--muted);font-size:12px}
+.cmd.blue{border-left-color:var(--blue)}.cmd.green{border-left-color:var(--green)}.cmd.amber{border-left-color:var(--amber)}.cmd.red{border-left-color:var(--red)}
+.form{display:grid;grid-template-columns:130px 1fr 1fr 90px;gap:10px}
+input,select{height:38px;border:1px solid var(--line);border-radius:9px;background:var(--soft);color:var(--text);padding:0 11px}
+input:focus,select:focus{outline:none;border-color:var(--blue);box-shadow:0 0 0 3px rgba(37,99,235,.15)}
+.log{white-space:pre-wrap;min-height:80px;color:var(--muted);font-family:Consolas,"Microsoft YaHei",monospace;line-height:1.55;word-break:break-word}
+/* --- APK installer: App Store detail card --- */
+.appWrap{max-width:600px;margin:0 auto;width:100%}
+.appCard{border:1px solid var(--line);border-radius:16px;background:linear-gradient(180deg,rgba(37,99,235,.05),var(--card) 120px);box-shadow:var(--shadow);padding:22px;animation:cardIn .4s cubic-bezier(.2,.8,.2,1)}
+@keyframes cardIn{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+.appCard.glow{animation:cardIn .4s cubic-bezier(.2,.8,.2,1),successGlow 1.1s ease}
+@keyframes successGlow{0%{box-shadow:var(--shadow)}30%{box-shadow:0 0 0 3px rgba(22,163,74,.35),0 12px 40px rgba(22,163,74,.25)}100%{box-shadow:var(--shadow)}}
+/* empty / drop state */
+.dropEmpty{border:2px dashed var(--line);border-radius:14px;background:var(--soft);padding:46px 20px;text-align:center;cursor:pointer;transition:border-color .18s,background .18s}
+.dropEmpty:hover{border-color:var(--blue)}
+.dropEmpty.over{border-color:var(--blue);background:rgba(37,99,235,.10)}
+.dropEmpty svg{width:52px;height:52px;color:var(--blue);animation:hintFloat 2.4s ease-in-out infinite}
+@keyframes hintFloat{0%,100%{transform:translateY(0);opacity:.85}50%{transform:translateY(-5px);opacity:1}}
+.dropEmpty b{display:block;font-size:16px;margin-top:8px}.dropEmpty span{display:block;margin-top:6px;color:var(--muted)}
+/* hero */
+.appHero{display:grid;grid-template-columns:72px 1fr;gap:16px;align-items:center}
+.appIconTile{width:72px;height:72px;border-radius:18px;background:linear-gradient(135deg,var(--blue),var(--blue2));display:grid;place-items:center;color:#fff;font-size:30px;font-weight:900;box-shadow:0 8px 22px rgba(37,99,235,.4)}
+.appIconTile svg{width:38px;height:38px;fill:none;stroke:currentColor;stroke-width:2}
+.appName{font-size:21px;font-weight:800;word-break:break-all;line-height:1.2}
+.pillRow{display:flex;flex-wrap:wrap;gap:7px;margin-top:9px}
+.pill{display:inline-flex;align-items:center;height:25px;padding:0 11px;border-radius:999px;font-size:12px;font-weight:700;border:1px solid var(--line);background:var(--soft);color:var(--muted)}
+.pill.ver{color:var(--blue);border-color:rgba(37,99,235,.35);background:rgba(37,99,235,.08)}
+.pill.perm{cursor:pointer}
+.pill.warn{border-color:rgba(217,119,6,.4);color:var(--amber);background:rgba(217,119,6,.08)}
+.pill.ok{border-color:rgba(22,163,74,.4);color:var(--green);background:rgba(22,163,74,.08)}
+.verBadge{margin-top:14px;padding:10px 12px;border-radius:10px;border:1px solid var(--line);background:var(--soft);font-weight:700;font-size:13px;display:none}
+.verBadge.show{display:block}
+.verBadge.up{border-color:rgba(22,163,74,.4);color:var(--green);background:rgba(22,163,74,.07)}
+.verBadge.down{border-color:rgba(217,119,6,.45);color:var(--amber);background:rgba(217,119,6,.07)}
+/* options */
+.optRow{display:flex;flex-wrap:wrap;gap:10px 16px;margin-top:16px}
+.optChip{display:inline-flex;align-items:center;gap:8px;font-weight:700;font-size:13px;cursor:pointer;user-select:none;padding:7px 11px;border:1px solid var(--line);border-radius:9px;background:var(--soft)}
+.optChip input{accent-color:var(--blue);width:auto;height:auto}
+.optChip small{color:var(--muted);font-weight:400}
+/* the morphing install button */
+.installBtn{position:relative;overflow:hidden;width:100%;height:54px;margin-top:18px;border:none;border-radius:12px;background:var(--blue);color:#fff;font-size:16px;font-weight:800;cursor:pointer;transition:filter .15s,transform .08s}
+.installBtn:hover{filter:brightness(1.05)}.installBtn:active{transform:translateY(1px)}
+.installBtn .installFill{position:absolute;inset:0 auto 0 0;width:0;background:linear-gradient(90deg,var(--blue),var(--blue2));transition:width .3s ease}
+.installBtn.installing{cursor:progress;background:rgba(37,99,235,.18)}
+.installBtn.installing .installFill{box-shadow:0 0 18px rgba(37,99,235,.5)}
+.installBtn.installing .installFill:after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,transparent,rgba(255,255,255,.35),transparent);animation:sheen 1.2s linear infinite}
+@keyframes sheen{from{transform:translateX(-100%)}to{transform:translateX(100%)}}
+.installBtn .installLabel{position:relative;z-index:1;display:flex;align-items:center;justify-content:center;gap:9px;height:100%}
+.installBtn.done{background:var(--green)}.installBtn.done .installFill{width:100%!important;background:var(--green)}
+.installBtn.failed{background:var(--red)}.installBtn.failed .installFill{background:var(--red)}
+.installBtn.failed{animation:shake .4s}
+@keyframes shake{10%,90%{transform:translateX(-2px)}30%,70%{transform:translateX(4px)}50%{transform:translateX(-4px)}}
+.chk{width:22px;height:22px}.chk path{stroke:#fff;stroke-width:3;fill:none;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:26;stroke-dashoffset:26}
+.installBtn.done .chk path{animation:chkDraw .5s .1s forwards ease}
+@keyframes chkDraw{to{stroke-dashoffset:0}}
+/* stage + streamed adb output */
+.stageRow{display:none;align-items:center;justify-content:space-between;margin-top:14px;font-weight:700}
+.stageRow.show{display:flex}
+.stageRow .elapsed{font-family:Consolas,monospace;color:var(--muted);font-weight:400}
+.adbOut{display:none;margin-top:12px;max-height:170px;overflow:auto;border:1px solid var(--line);border-radius:10px;background:#0a0f16;color:#9fb3c8;padding:11px 12px;font-family:Consolas,monospace;font-size:12px;line-height:1.55;white-space:pre-wrap;word-break:break-word}
+body:not(.dark) .adbOut{background:#0f1720;color:#cfe0f0}
+.adbOut.show{display:block}
+.permsPop{display:none;margin-top:12px;max-height:150px;overflow:auto;border:1px solid var(--line);border-radius:10px;background:var(--soft);padding:11px;font-family:Consolas,monospace;font-size:12px;color:var(--muted);white-space:pre-wrap;line-height:1.6}
+.permsPop.show{display:block}
+@media (prefers-reduced-motion: reduce){.appCard,.appCard.glow,.dropEmpty svg,.installBtn.installing .installFill:after,.installBtn.done .chk path,.installBtn.failed{animation:none}}
+@media(max-width:820px){.appHero{grid-template-columns:1fr;text-align:center;justify-items:center}}
+/* --- shared --- */
+.paramList{display:grid;gap:11px}
+.paramItem{display:grid;grid-template-columns:1.2fr .8fr .8fr auto;gap:11px;align-items:center;border:1px solid var(--line);background:var(--soft);border-radius:9px;padding:11px 13px}
+.paramName b{display:block}.paramName span,.paramValue span{display:block;color:var(--muted);font-size:12px;margin-top:3px}.paramValue b{display:block;word-break:break-word}
+.paramState{height:26px;border:1px solid var(--line);border-radius:999px;display:inline-flex;align-items:center;justify-content:center;padding:0 11px;font-weight:800;font-size:12px}
+.paramItem.changed{border-color:rgba(217,119,6,.45);background:rgba(217,119,6,.06)}.paramItem.changed .paramState{border-color:rgba(217,119,6,.45);color:var(--amber);background:rgba(217,119,6,.08)}
+.paramItem.ok .paramState{border-color:rgba(22,163,74,.35);color:var(--green);background:rgba(22,163,74,.08)}
+.resetBtn{height:31px;border-radius:8px;border:1px solid var(--line);background:var(--card);color:var(--text);font-weight:800;padding:0 11px;cursor:pointer}.resetBtn.primary{border-color:rgba(37,99,235,.45);color:var(--blue)}
+.toasts{position:fixed;right:22px;bottom:22px;z-index:60;display:flex;flex-direction:column-reverse;gap:10px;width:min(390px,calc(100vw - 28px));pointer-events:none}
+.toast{border:1px solid var(--line);border-left:4px solid var(--blue);background:var(--card);box-shadow:0 16px 38px rgba(15,23,42,.20);border-radius:10px;padding:12px 13px;opacity:0;transform:translateX(24px) translateY(10px) scale(.98);transition:opacity .22s ease,transform .22s cubic-bezier(.2,.8,.2,1);pointer-events:auto}
+.toast.show{opacity:1;transform:none}.toast b{display:block;margin-bottom:4px}.toast span{display:block;color:var(--muted);line-height:1.45;word-break:break-word}
+.toast.ok{border-left-color:var(--green)}.toast.err{border-left-color:var(--red)}.toast.warn{border-left-color:var(--amber)}
+.modalMask{position:fixed;inset:0;background:rgba(2,6,23,.56);z-index:70;display:none;place-items:center;padding:18px}.modalMask.show{display:grid}
+.modal{width:min(470px,100%);background:var(--card);border:1px solid var(--line);border-radius:12px;box-shadow:0 24px 70px rgba(0,0,0,.35);padding:20px}
+.modal h3{margin:0 0 8px;font-size:18px}.modal p{margin:0;color:var(--muted);line-height:1.65;white-space:pre-wrap;word-break:break-word}
+.modalActions{display:flex;justify-content:flex-end;gap:10px;margin-top:18px}
+.modalActions button{height:36px;border-radius:8px;border:1px solid var(--line);background:var(--soft);color:var(--text);padding:0 14px;font-weight:800;cursor:pointer}
+.modalActions .danger{background:var(--amber);border-color:var(--amber);color:#111827}
+.cmd.is-busy,.btn.is-busy{opacity:.68;cursor:wait}.cmd:disabled,.btn:disabled,.resetBtn:disabled{pointer-events:none;opacity:.6}
+@media(max-width:1180px){.row,.row3{grid-template-columns:1fr}.infoGrid,.apkGrid{grid-template-columns:1fr 1fr}}
+@media(max-width:820px){.app{grid-template-columns:1fr}.side{position:static;width:auto;height:auto}.main{grid-column:1}.top{position:static;height:auto;align-items:flex-start;flex-direction:column;gap:10px;padding:16px}.wrap{padding:14px}.metricGrid,.cmdGrid,.form,.paramItem,.infoGrid,.apkGrid,.exportBox{grid-template-columns:1fr}.rig{grid-template-columns:1fr}.toasts{right:14px;bottom:14px}}
 </style>
 </head>
-<body class="dark"><div class="toasts" id="toasts"></div><div class="modalMask" id="confirmMask"><div class="modal"><h3 id="confirmTitle">确认执行</h3><p id="confirmMsg">这个操作会修改 Quest 状态。</p><div class="modalActions"><button id="confirmCancel">取消</button><button class="danger" id="confirmOk">确认执行</button></div></div></div>
-<svg width="0" height="0" style="position:absolute"><symbol id="i-vr" viewBox="0 0 24 24"><path d="M0 0h24v24H0z" fill="none"/><path d="M6 9h12a3 3 0 0 1 3 3v3a3 3 0 0 1-3 3h-1.5l-2.5-3h-4l-2.5 3H6a3 3 0 0 1-3-3v-3a3 3 0 0 1 3-3z"/><path d="M9 12h.01"/><path d="M15 12h.01"/><path d="M10 15h4"/></symbol><symbol id="i-home" viewBox="0 0 24 24"><path d="M0 0h24v24H0z" fill="none"/><path d="M5 12l7-7l7 7"/><path d="M6 10v9h12v-9"/></symbol><symbol id="i-console" viewBox="0 0 24 24"><path d="M0 0h24v24H0z" fill="none"/><path d="M8 9l3 3l-3 3"/><path d="M13 15h3"/><path d="M3 4h18v16H3z"/></symbol><symbol id="i-info" viewBox="0 0 24 24"><path d="M0 0h24v24H0z" fill="none"/><path d="M12 9h.01"/><path d="M11 12h1v4h1"/><path d="M12 3a9 9 0 1 0 0 18a9 9 0 0 0 0-18z"/></symbol><symbol id="i-settings" viewBox="0 0 24 24"><path d="M0 0h24v24H0z" fill="none"/><path d="M10.325 4.317a2 2 0 0 1 3.35 0l.2.344a2 2 0 0 0 2.009.96l.392-.074a2 2 0 0 1 2.36 2.36l-.074.392a2 2 0 0 0 .96 2.009l.344.2a2 2 0 0 1 0 3.35l-.344.2a2 2 0 0 0-.96 2.009l.074.392a2 2 0 0 1-2.36 2.36l-.392-.074a2 2 0 0 0-2.009.96l-.2.344a2 2 0 0 1-3.35 0l-.2-.344a2 2 0 0 0-2.009-.96l-.392.074a2 2 0 0 1-2.36-2.36l.074-.392a2 2 0 0 0-.96-2.009l-.344-.2a2 2 0 0 1 0-3.35l.344-.2a2 2 0 0 0 .96-2.009l-.074-.392a2 2 0 0 1 2.36-2.36l.392.074a2 2 0 0 0 2.009-.96z"/><path d="M9 12a3 3 0 1 0 6 0a3 3 0 0 0-6 0"/></symbol><symbol id="i-log" viewBox="0 0 24 24"><path d="M0 0h24v24H0z" fill="none"/><path d="M5 5h14v14H5z"/><path d="M9 9h6"/><path d="M9 13h6"/></symbol></svg>
-<div class="app"><aside class="side"><div class="brand"><div class="brandIcon"><svg width="22" height="22"><use href="#i-vr"/></svg></div><div><b>Quest ADB</b><span>Single BAT WebUI</span></div></div><nav class="nav"><a href="#overview" class="active"><svg><use href="#i-home"/></svg>总览</a><a href="#console"><svg><use href="#i-console"/></svg>快捷控制台</a><a href="#device"><svg><use href="#i-info"/></svg>设备信息</a><a href="#settings"><svg><use href="#i-settings"/></svg>高级 settings</a><a href="#logs"><svg><use href="#i-log"/></svg>日志</a></nav></aside><main class="main"><header class="top"><div class="title"><h1 id="pageTitle">总览</h1><p id="pageSub">状态指标和设备概览</p></div><div class="toolbar"><span class="chip" id="statusChip"><i class="chipDot"></i><span>未连接</span></span><span class="chip">ADB <b id="adbShort">adb.exe</b></span><span class="chip">Wi-Fi <b id="wifiChip">-</b></span><button class="btn ghost" id="themeBtn">浅色</button><button class="btn primary" id="refreshBtn">刷新</button></div></header><div class="wrap"><div class="notice">保活、24 小时亮屏和无线 ADB 只建议短时间测试；结束后执行“安全熄屏”或“保守默认值”。</div>
-<section class="page active" id="overview"><div class="row"><div class="card"><div class="head"><h2>设备</h2><span class="tag" id="deviceTag">Quest</span></div><div class="body"><div class="headsetBox"><div class="deviceIcon"><svg><use href="#i-vr"/></svg></div><div><div class="deviceName" id="heroModel">Quest</div><div class="hint" id="stateHint">等待读取设备状态。</div><div class="state" id="stateBig">none</div></div></div><div class="rig"><div class="controllerBox left"><span class="role">左手柄</span><b id="leftControllerLite">--</b><span class="stateText" id="leftControllerState">-</span></div><div class="metaItem"><span>Wi-Fi IP</span><b id="wifiIpLite">-</b></div><div class="controllerBox right"><span class="role">右手柄</span><b id="rightControllerLite">--</b><span class="stateText" id="rightControllerState">-</span></div></div></div></div><div class="card"><div class="head"><h2>状态指标</h2><span class="tag" id="clockText">-</span></div><div class="body"><div class="metricGrid"><div class="metric" id="batteryGauge"><svg class="ring" viewBox="0 0 100 100"><circle class="track" cx="50" cy="50" r="40" pathLength="100"/><circle class="meter" cx="50" cy="50" r="40" pathLength="100" stroke-dasharray="0 100"/></svg><div><div class="metricValue" id="batteryText">--%</div><div class="metricLabel" id="batterySub">电量</div></div></div><div class="metric" id="tempGauge"><svg class="ring" viewBox="0 0 100 100"><circle class="track" cx="50" cy="50" r="40" pathLength="100"/><circle class="meter" cx="50" cy="50" r="40" pathLength="100" stroke-dasharray="0 100"/></svg><div><div class="metricValue" id="tempText">--°C</div><div class="metricLabel" id="tempSub">温度</div></div></div><div class="metric" id="sleepGauge"><svg class="ring" viewBox="0 0 100 100"><circle class="track" cx="50" cy="50" r="40" pathLength="100"/><circle class="meter" cx="50" cy="50" r="40" pathLength="100" stroke-dasharray="0 100"/></svg><div><div class="metricValue" id="sleepText">-</div><div class="metricLabel" id="sleepSub">休眠</div></div></div></div></div></div></div><div class="miniGrid"><div class="mini"><span>SoC</span><b id="socLite">-</b></div><div class="mini"><span>显示</span><b id="displaySummaryLite">-</b></div><div class="mini"><span>热状态</span><b id="thermalSummaryLite">-</b></div><div class="mini"><span>工厂/校准</span><b id="factorySummaryLite">-</b></div></div><div class="miniGrid"><div class="mini"><span>供电</span><b id="powerSource">-</b></div><div class="mini"><span>ADB Wi-Fi</span><b id="adbWifi">-</b></div><div class="mini"><span>健康</span><b id="batteryHealth">-</b></div><div class="mini"><span>运行状态</span><b id="wakefulness">-</b></div></div><div class="card"><div class="head"><h2>一键导出设备全部信息</h2><span class="tag">只读 ADB</span></div><div class="body"><div class="exportBox"><div><b>生成私有完整版 + 分享安全版 HTML</b><div class="hint" id="exportStatus">点击后重新现采设备信息。私有版保留完整数据，分享版会脱敏序列号、IP、MAC、fingerprint 等。</div><div class="exportLinks" id="exportLinks"></div></div><button class="btn primary" id="exportBtn">导出 HTML</button></div></div></div><div class="card"><div class="head"><h2>参数修改列表</h2><span class="tag" id="paramSummary">等待刷新</span></div><div class="body"><div class="paramList" id="paramList"></div></div></div><div class="row"><div class="card"><div class="head"><h2>关键参数</h2></div><div class="body"><table class="table"><tr><td>stay_on_while_plugged_in</td><td id="stayOn">-</td></tr><tr><td>wifi_sleep_policy</td><td id="wifiSleep">-</td></tr><tr><td>screen_off_timeout</td><td id="screenOff">-</td></tr><tr><td>sleep_timeout</td><td id="sleepTimeout">-</td></tr></table></div></div><div class="card"><div class="head"><h2>资源状态</h2></div><div class="body"><table class="table"><tr><td>存储</td><td id="storage">-</td></tr><tr><td>内存</td><td id="memory">-</td></tr><tr><td>供电来源</td><td id="powerSource2">-</td></tr><tr><td>ADB 路径</td><td id="adbPathShort">-</td></tr></table></div></div></div></section>
-<section class="page" id="console"><div class="row3"><div class="card"><div class="head"><h2>休眠与保护</h2><span class="tag">推荐</span></div><div class="body cmdGrid"><button class="cmd blue" data-action="key_wakeup"><b>亮屏 / 唤醒</b><span>仅在 ADB 在线时有效</span></button><button class="cmd green" data-action="safe_sleep"><b>安全熄屏</b><span>恢复保守值并发送睡眠键</span></button><button class="cmd green" data-action="restore_sleep"><b>恢复休眠超时</b><span>5 分钟熄屏，并解除 prox_close</span></button><button class="cmd" data-action="conservative"><b>保守默认值</b><span>恢复参数并发送 prox_open</span></button></div></div><div class="card"><div class="head"><h2>调试工作模式</h2><span class="tag">需确认</span></div><div class="body cmdGrid"><button class="cmd blue dangerAction" data-action="debug_mode"><b>启用调试模式</b><span>保持唤醒、24 小时、prox_close</span></button><button class="cmd blue dangerAction" data-action="keep_awake"><b>应用保活</b><span>同时改 Wi-Fi、sleep_timeout</span></button><button class="cmd amber dangerAction" data-action="wireless"><b>开启无线 ADB</b><span>需要 USB 已授权</span></button><button class="cmd red dangerAction" data-action="wireless_off"><b>关闭无线 ADB</b><span>切回 USB 模式</span></button></div></div><div class="card"><div class="head"><h2>输入与广播</h2><span class="tag">命令</span></div><div class="body cmdGrid"><button class="cmd" data-action="key_sleep"><b>KEYCODE_SLEEP</b><span>系统睡眠键</span></button><button class="cmd" data-action="prox_open"><b>广播 prox_open</b><span>解除佩戴模拟，允许熄屏</span></button><button class="cmd amber dangerAction" data-action="prox_close"><b>广播 prox_close</b><span>模拟佩戴靠近</span></button><button class="cmd amber" id="goCustomBroadcast"><b>自定义广播</b><span>去高级 settings 页面发送</span></button></div></div><div class="card"><div class="head"><h2>屏幕超时</h2><span class="tag">预设</span></div><div class="body cmdGrid"><button class="cmd green" data-action="screen_5m"><b>5 分钟熄屏</b><span>screen_off_timeout=300000</span></button><button class="cmd blue dangerAction" data-action="screen_24h"><b>24 小时亮屏</b><span>screen_off_timeout=86400000</span></button><button class="cmd" data-action="stay_off"><b>关闭保持唤醒</b><span>stay_on=0</span></button><button class="cmd blue dangerAction" data-action="stay_usb_ac"><b>USB/AC 保持唤醒</b><span>stay_on=3</span></button></div></div><div class="card"><div class="head"><h2>状态与服务</h2><span class="tag">维护</span></div><div class="body cmdGrid"><button class="cmd" id="manualRefresh"><b>刷新状态</b><span>重新读取设备数值</span></button><button class="cmd" data-action="restart_adb"><b>重启 ADB</b><span>仅重启电脑端服务</span></button><button class="cmd dangerAction" data-action="restore_backup"><b>从备份恢复</b><span>恢复首次写入前设置</span></button><button class="cmd" id="goLogs"><b>操作日志</b><span>查看文件日志</span></button></div></div><div class="card"><div class="head"><h2>当前摘要</h2><span class="tag" id="consoleState">-</span></div><div class="body"><table class="table"><tr><td>连接</td><td id="consoleConn">-</td></tr><tr><td>电量</td><td id="consoleBattery">-</td></tr><tr><td>休眠</td><td id="consoleWake">-</td></tr><tr><td>Wi-Fi</td><td id="consoleWifi">-</td></tr></table></div></div></div></section>
-<section class="page" id="device"><div class="card"><div class="head"><h2>设备档案</h2><span class="tag">公开 ADB 只读</span></div><div class="body"><div class="infoGrid"><div class="infoTile"><span>厂商 / 品牌</span><b><span id="manufacturer">-</span> / <span id="brand">-</span></b></div><div class="infoTile"><span>型号</span><b id="model">-</b></div><div class="infoTile"><span>产品 / 设备 / 板级</span><b><span id="productName">-</span> / <span id="productDevice">-</span> / <span id="board">-</span></b></div><div class="infoTile"><span>SoC</span><b id="soc">-</b></div><div class="infoTile"><span>Build</span><b id="buildId">-</b></div><div class="infoTile"><span>Branch</span><b id="buildBranch">-</b></div><div class="infoTile"><span>Incremental</span><b id="buildIncremental">-</b></div><div class="infoTile"><span>ABI</span><b id="abi">-</b></div><div class="infoTile"><span>Vendor Patch</span><b id="vendorPatch">-</b></div></div></div></div><div class="row"><div class="card"><div class="head"><h2>设备与连接</h2></div><div class="body"><table class="table"><tr><td>ADB 路径</td><td id="adbPath">-</td></tr><tr><td>设备行</td><td id="deviceLine">-</td></tr><tr><td>Wi-Fi IP</td><td id="wifiIp">-</td></tr><tr><td>Android</td><td id="android">-</td></tr><tr><td>SDK</td><td id="sdk">-</td></tr><tr><td>安全补丁</td><td id="securityPatch">-</td></tr></table></div></div><div class="card"><div class="head"><h2>硬件摘要</h2></div><div class="body"><table class="table"><tr><td>显示</td><td id="displaySummary">-</td></tr><tr><td>热状态</td><td id="thermalSummary">-</td></tr><tr><td>工厂/校准</td><td id="factorySummary">-</td></tr><tr><td>Virtual Desktop</td><td><span id="vdPackage">-</span> <span id="vdVersion">-</span></td></tr></table></div></div><div class="card"><div class="head"><h2>手柄线索</h2></div><div class="body"><table class="table"><tr><td>左手柄电量</td><td id="controllerLeftBattery">-</td></tr><tr><td>右手柄电量</td><td id="controllerRightBattery">-</td></tr><tr><td>左手柄状态</td><td id="controllerLeftStatus">-</td></tr><tr><td>右手柄状态</td><td id="controllerRightStatus">-</td></tr></table><div class="log" id="controllerHint">-</div></div></div><div class="card"><div class="head"><h2>电源状态</h2></div><div class="body"><table class="table"><tr><td>mStayOn</td><td id="mStayOn">-</td></tr><tr><td>mProximityPositive</td><td id="mProximityPositive">-</td></tr><tr><td>mStayOnWhilePluggedInSetting</td><td id="mStayOnSetting">-</td></tr><tr><td>Sleep timeout</td><td id="powerSleepLine">-</td></tr></table></div></div></div><div class="card"><div class="head"><h2>工厂 / 校准推断边界</h2></div><div class="body"><div class="log">可以显示 Quest 公开 ADB 暴露的 Factory / Online calibration 线索，例如 Eureka、PVT1.1、station/location/test 代码。不能把内部代码可靠翻译成具体国家、城市或工厂；Wi-Fi 国家码也不等于出产地。完整字段请用“一键导出设备全部信息”。</div></div></div></section>
-<section class="page" id="settings"><div class="card"><div class="head"><h2>自定义 settings put</h2></div><div class="body form"><select id="customNs"><option>global</option><option>system</option><option>secure</option></select><input id="customKey" placeholder="键名，例如 screen_off_timeout"><input id="customValue" placeholder="值"><button class="btn" id="customSet">写入</button></div></div><div class="card"><div class="head"><h2>发送自定义广播</h2></div><div class="body form" style="grid-template-columns:1fr 82px"><input id="broadcastName" placeholder="例如 com.oculus.vrpowermanager.prox_open"><button class="btn" id="customBroadcast">发送</button></div></div></section><section class="page" id="logs"><div class="card"><div class="head"><h2>日志</h2><button class="btn ghost" id="refreshLogs">刷新日志</button></div><div class="body"><div class="mini" style="margin-bottom:12px"><span>日志文件</span><b id="logPath">-</b></div><div class="log" id="logBox">等待操作...</div></div></div></section></div></main></div>
+<body class="dark">
+<div class="toasts" id="toasts"></div>
+<div class="modalMask" id="confirmMask"><div class="modal"><h3 id="confirmTitle">确认执行</h3><p id="confirmMsg">这个操作会修改 Quest 状态。</p><div class="modalActions"><button id="confirmCancel">取消</button><button class="danger" id="confirmOk">确认执行</button></div></div></div>
+<svg width="0" height="0" style="position:absolute">
+<symbol id="i-vr" viewBox="0 0 24 24"><path d="M6 9h12a3 3 0 0 1 3 3v3a3 3 0 0 1-3 3h-1.5l-2.5-3h-4l-2.5 3H6a3 3 0 0 1-3-3v-3a3 3 0 0 1 3-3z"/><path d="M9 12h.01"/><path d="M15 12h.01"/><path d="M10 15h4"/></symbol>
+<symbol id="i-home" viewBox="0 0 24 24"><path d="M5 12l7-7l7 7"/><path d="M6 10v9h12v-9"/></symbol>
+<symbol id="i-console" viewBox="0 0 24 24"><path d="M8 9l3 3l-3 3"/><path d="M13 15h3"/><path d="M3 4h18v16H3z"/></symbol>
+<symbol id="i-apk" viewBox="0 0 24 24"><path d="M12 3v12"/><path d="M8 11l4 4l4-4"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></symbol>
+<symbol id="i-info" viewBox="0 0 24 24"><path d="M12 9h.01"/><path d="M11 12h1v4h1"/><path d="M12 3a9 9 0 1 0 0 18a9 9 0 0 0 0-18z"/></symbol>
+<symbol id="i-settings" viewBox="0 0 24 24"><path d="M10.325 4.317a2 2 0 0 1 3.35 0l.2.344a2 2 0 0 0 2.009.96l.392-.074a2 2 0 0 1 2.36 2.36l-.074.392a2 2 0 0 0 .96 2.009l.344.2a2 2 0 0 1 0 3.35l-.344.2a2 2 0 0 0-.96 2.009l.074.392a2 2 0 0 1-2.36 2.36l-.392-.074a2 2 0 0 0-2.009.96l-.2.344a2 2 0 0 1-3.35 0l-.2-.344a2 2 0 0 0-2.009-.96l-.392.074a2 2 0 0 1-2.36-2.36l.074-.392a2 2 0 0 0-.96-2.009l-.344-.2a2 2 0 0 1 0-3.35l.344-.2a2 2 0 0 0 .96-2.009l-.074-.392a2 2 0 0 1 2.36-2.36l.392.074a2 2 0 0 0 2.009-.96z"/><path d="M9 12a3 3 0 1 0 6 0a3 3 0 0 0-6 0"/></symbol>
+<symbol id="i-log" viewBox="0 0 24 24"><path d="M5 5h14v14H5z"/><path d="M9 9h6"/><path d="M9 13h6"/></symbol>
+<symbol id="i-upload" viewBox="0 0 24 24"><path d="M12 15V4"/><path d="M8 8l4-4l4 4"/><path d="M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></symbol>
+</svg>
+<div class="app">
+<aside class="side">
+<div class="brand"><div class="brandIcon"><svg width="22" height="22"><use href="#i-vr"/></svg></div><div><b>Quest ADB</b><span>Single-BAT WebUI</span></div></div>
+<nav class="nav">
+<a href="#overview" class="active"><svg><use href="#i-home"/></svg>总览</a>
+<a href="#console"><svg><use href="#i-console"/></svg>快捷控制台</a>
+<a href="#install"><svg><use href="#i-apk"/></svg>应用安装</a>
+<a href="#device"><svg><use href="#i-info"/></svg>设备信息</a>
+<a href="#settings"><svg><use href="#i-settings"/></svg>高级 settings</a>
+<a href="#logs"><svg><use href="#i-log"/></svg>日志</a>
+</nav>
+<div class="navFoot">只监听 127.0.0.1<br>关闭窗口即停止服务</div>
+</aside>
+<main class="main">
+<header class="top">
+<div class="title"><h1 id="pageTitle">总览</h1><p id="pageSub">状态指标和设备概览</p></div>
+<div class="toolbar">
+<span class="chip" id="statusChip"><i class="chipDot"></i><span>未连接</span></span>
+<span class="chip">ADB <b id="adbShort">adb.exe</b></span>
+<span class="chip">Wi-Fi <b id="wifiChip">-</b></span>
+<button class="btn ghost" id="themeBtn">浅色</button>
+<button class="btn primary" id="refreshBtn">刷新</button>
+</div>
+</header>
+<div class="wrap">
+<div class="notice">保活、24 小时亮屏和无线 ADB 只建议短时间测试；结束后执行“安全熄屏”或“保守默认值”。安装 APK 会修改设备，请确认来源可信。</div>
+
+<section class="page active" id="overview">
+<div class="row">
+<div class="card"><div class="head"><h2>设备</h2><span class="tag" id="deviceTag">Quest</span></div><div class="body">
+<div class="headsetBox"><div class="deviceIcon"><svg><use href="#i-vr"/></svg></div><div><div class="deviceName" id="heroModel">Quest</div><div class="hint" id="stateHint">等待读取设备状态。</div><div class="state" id="stateBig">none</div></div></div>
+<div class="rig"><div class="controllerBox left"><span class="role">左手柄</span><b id="leftControllerLite">--</b><span class="stateText" id="leftControllerState">-</span></div><div class="metaItem"><span>Wi-Fi IP</span><b id="wifiIpLite">-</b></div><div class="controllerBox right"><span class="role">右手柄</span><b id="rightControllerLite">--</b><span class="stateText" id="rightControllerState">-</span></div></div>
+</div></div>
+<div class="card"><div class="head"><h2>状态指标</h2><span class="tag" id="clockText">-</span></div><div class="body">
+<div class="metricGrid">
+<div class="metric" id="batteryGauge"><svg class="ring" viewBox="0 0 100 100"><circle class="track" cx="50" cy="50" r="40" pathLength="100"/><circle class="meter" cx="50" cy="50" r="40" pathLength="100" stroke-dasharray="0 100"/></svg><div><div class="metricValue" id="batteryText">--%</div><div class="metricLabel" id="batterySub">电量</div></div></div>
+<div class="metric" id="tempGauge"><svg class="ring" viewBox="0 0 100 100"><circle class="track" cx="50" cy="50" r="40" pathLength="100"/><circle class="meter" cx="50" cy="50" r="40" pathLength="100" stroke-dasharray="0 100"/></svg><div><div class="metricValue" id="tempText">--°C</div><div class="metricLabel" id="tempSub">温度</div></div></div>
+<div class="metric" id="sleepGauge"><svg class="ring" viewBox="0 0 100 100"><circle class="track" cx="50" cy="50" r="40" pathLength="100"/><circle class="meter" cx="50" cy="50" r="40" pathLength="100" stroke-dasharray="0 100"/></svg><div><div class="metricValue" id="sleepText">-</div><div class="metricLabel" id="sleepSub">唤醒</div></div></div>
+</div>
+</div></div>
+</div>
+<div class="card"><div class="head"><h2>一键导出</h2><span class="tag">只读采集</span></div><div class="body">
+<div class="exportBox"><div><b>导出设备全部信息</b><div class="hint" id="exportStatus">生成私有完整版与分享安全版两份 HTML。分享前请人工复核。</div><div class="exportLinks" id="exportLinks"></div></div><button class="btn primary" id="exportBtn">开始导出</button></div>
+</div></div>
+</section>
+
+<section class="page" id="console">
+<div class="card"><div class="head"><h2>常用操作</h2><span class="tag">点击执行</span></div><div class="body">
+<div class="cmdGrid">
+<button class="cmd green" data-action="key_wakeup"><b>唤醒屏幕</b><span>KEYCODE_WAKEUP</span></button>
+<button class="cmd blue" data-action="safe_sleep"><b>安全熄屏</b><span>恢复保守值并 SLEEP</span></button>
+<button class="cmd blue" data-action="restore_sleep"><b>恢复休眠</b><span>正常休眠 + 5 分钟超时</span></button>
+<button class="cmd blue" data-action="conservative"><b>保守默认值</b><span>恢复安全默认参数</span></button>
+<button class="cmd amber dangerAction" data-action="debug_mode"><b>调试工作模式</b><span>保活 + 24h 亮屏（短时）</span></button>
+<button class="cmd amber dangerAction" data-action="keep_awake"><b>短时保活</b><span>写入保持唤醒参数</span></button>
+<button class="cmd amber dangerAction" data-action="wireless"><b>开启无线 ADB</b><span>tcpip 5555</span></button>
+<button class="cmd amber dangerAction" data-action="wireless_off"><b>关闭无线 ADB</b><span>切回 USB</span></button>
+<button class="cmd blue" data-action="key_sleep"><b>发送 SLEEP</b><span>KEYCODE_SLEEP</span></button>
+<button class="cmd blue" data-action="prox_open"><b>prox_open</b><span>解除模拟佩戴</span></button>
+<button class="cmd amber dangerAction" data-action="prox_close"><b>prox_close</b><span>模拟佩戴靠近</span></button>
+<button class="cmd blue" data-action="screen_5m"><b>屏幕超时 5 分钟</b><span>screen_off_timeout</span></button>
+<button class="cmd amber dangerAction" data-action="screen_24h"><b>屏幕超时 24 小时</b><span>长时间不熄屏</span></button>
+<button class="cmd blue" data-action="stay_off"><b>取消插电保持</b><span>stay_on = 0</span></button>
+<button class="cmd amber dangerAction" data-action="stay_usb_ac"><b>USB/AC 保持唤醒</b><span>stay_on = 3</span></button>
+<button class="cmd blue" data-action="restart_adb"><b>重启 ADB 服务</b><span>kill + start server</span></button>
+<button class="cmd amber dangerAction" data-action="restore_backup"><b>从备份恢复</b><span>还原首次写入前的值</span></button>
+</div>
+</div></div>
+<div class="card"><div class="head"><h2>实时概览</h2></div><div class="body"><table class="table">
+<tr><td>连接</td><td id="consoleConn">-</td></tr><tr><td>电量</td><td id="consoleBattery">-</td></tr><tr><td>休眠</td><td id="consoleWake">-</td></tr><tr><td>Wi-Fi</td><td id="consoleWifi">-</td></tr><tr><td>设备状态</td><td id="consoleState">-</td></tr><tr><td>电源</td><td id="powerSource2">-</td></tr>
+</table></div></div>
+</section>
+
+<section class="page" id="install">
+<div class="appWrap">
+<div class="appCard" id="appCard">
+<!-- empty / drop state -->
+<div class="dropEmpty" id="apkDrop"><svg><use href="#i-upload"/></svg><b>拖拽 APK 到这里，或点击选择</b><span id="dropHint">本地上传后由 ADB 安装到已连接的 Quest。安装前会二次确认。</span><input type="file" id="apkFile" accept=".apk,application/vnd.android.package-archive" style="display:none"></div>
+<!-- detail state (revealed after upload) -->
+<div id="apkDetail" style="display:none">
+<div class="appHero">
+<div class="appIconTile" id="apkIconTile"><svg viewBox="0 0 24 24"><use href="#i-apk"/></svg></div>
+<div>
+<div class="appName" id="apkName">-</div>
+<div class="pillRow" id="apkPills"></div>
+</div>
+</div>
+<div class="verBadge" id="apkVerBadge"></div>
+<div class="optRow">
+<label class="optChip"><input type="checkbox" id="optReplace" checked>重装保留数据 <small>-r</small></label>
+<label class="optChip"><input type="checkbox" id="optGrant">授予全部权限 <small>-g</small></label>
+<label class="optChip"><input type="checkbox" id="optDowngrade">允许降级 <small>-d</small></label>
+<label class="optChip"><input type="checkbox" id="optUninstallFirst">签名不符先卸载 <small>清数据</small></label>
+</div>
+<button class="installBtn" id="installBtn"><span class="installFill" id="installFill"></span><span class="installLabel" id="installLabel">安装到 Quest</span></button>
+<div class="stageRow" id="stageRow"><span id="stageText">准备中…</span><span class="elapsed" id="elapsed">0:00</span></div>
+<div class="permsPop" id="apkPerms"></div>
+<div class="adbOut" id="adbOut"></div>
+<div style="margin-top:12px;display:flex;gap:14px;flex-wrap:wrap"><a href="#" id="apkPermsBtn" style="color:var(--blue);font-weight:700;font-size:13px">查看权限</a><a href="#" id="apkReset" style="color:var(--muted);font-weight:700;font-size:13px">换一个 APK</a></div>
+</div>
+</div>
+</div>
+</section>
+
+
+<section class="page" id="device">
+<div class="card"><div class="head"><h2>设备档案</h2><span class="tag">公开 ADB 只读</span></div><div class="body"><div class="infoGrid">
+<div class="infoTile"><span>厂商 / 品牌</span><b><span id="manufacturer">-</span> / <span id="brand">-</span></b></div>
+<div class="infoTile"><span>型号</span><b id="model">-</b></div>
+<div class="infoTile"><span>产品 / 设备 / 板级</span><b><span id="productName">-</span> / <span id="productDevice">-</span> / <span id="board">-</span></b></div>
+<div class="infoTile"><span>SoC</span><b id="soc">-</b></div>
+<div class="infoTile"><span>Build</span><b id="buildId">-</b></div>
+<div class="infoTile"><span>Branch</span><b id="buildBranch">-</b></div>
+<div class="infoTile"><span>Incremental</span><b id="buildIncremental">-</b></div>
+<div class="infoTile"><span>ABI</span><b id="abi">-</b></div>
+<div class="infoTile"><span>Vendor Patch</span><b id="vendorPatch">-</b></div>
+</div></div></div>
+<div class="row">
+<div class="card"><div class="head"><h2>设备与连接</h2></div><div class="body"><table class="table">
+<tr><td>ADB 路径</td><td id="adbPath">-</td></tr><tr><td>设备行</td><td id="deviceLine">-</td></tr><tr><td>Wi-Fi IP</td><td id="wifiIp">-</td></tr><tr><td>Android</td><td id="android">-</td></tr><tr><td>SDK</td><td id="sdk">-</td></tr><tr><td>安全补丁</td><td id="securityPatch">-</td></tr>
+</table></div></div>
+<div class="card"><div class="head"><h2>硬件摘要</h2></div><div class="body"><table class="table">
+<tr><td>显示</td><td id="displaySummary">-</td></tr><tr><td>热状态</td><td id="thermalSummary">-</td></tr><tr><td>工厂/校准</td><td id="factorySummary">-</td></tr><tr><td>Virtual Desktop</td><td><span id="vdPackage">-</span> <span id="vdVersion">-</span></td></tr>
+</table></div></div>
+<div class="card"><div class="head"><h2>手柄线索</h2></div><div class="body"><table class="table">
+<tr><td>左手柄电量</td><td id="controllerLeftBattery">-</td></tr><tr><td>右手柄电量</td><td id="controllerRightBattery">-</td></tr><tr><td>左手柄状态</td><td id="controllerLeftStatus">-</td></tr><tr><td>右手柄状态</td><td id="controllerRightStatus">-</td></tr>
+</table><div class="log" id="controllerHint">-</div></div></div>
+<div class="card"><div class="head"><h2>电源状态</h2></div><div class="body"><table class="table">
+<tr><td>mStayOn</td><td id="mStayOn">-</td></tr><tr><td>mProximityPositive</td><td id="mProximityPositive">-</td></tr><tr><td>mStayOnWhilePluggedInSetting</td><td id="mStayOnSetting">-</td></tr><tr><td>Sleep timeout</td><td id="powerSleepLine">-</td></tr>
+</table></div></div>
+</div>
+<div class="card"><div class="head"><h2>参数对照</h2><span class="tag" id="paramSummary">-</span></div><div class="body"><div class="paramList" id="paramList"></div></div></div>
+<div class="card"><div class="head"><h2>工厂 / 校准推断边界</h2></div><div class="body"><div class="log">可以显示 Quest 公开 ADB 暴露的 Factory / Online calibration 线索，例如 Eureka、PVT1.1、station/location/test 代码。不能把内部代码可靠翻译成具体国家、城市或工厂；Wi-Fi 国家码也不等于出产地。完整字段请用“一键导出设备全部信息”。</div></div></div>
+</section>
+
+<section class="page" id="settings">
+<div class="card"><div class="head"><h2>自定义 settings put</h2></div><div class="body form"><select id="customNs"><option>global</option><option>system</option><option>secure</option></select><input id="customKey" placeholder="键名，例如 screen_off_timeout"><input id="customValue" placeholder="值"><button class="btn" id="customSet">写入</button></div></div>
+<div class="card"><div class="head"><h2>发送自定义广播</h2></div><div class="body form" style="grid-template-columns:1fr 90px"><input id="broadcastName" placeholder="例如 com.oculus.vrpowermanager.prox_open"><button class="btn" id="customBroadcast">发送</button></div></div>
+</section>
+
+<section class="page" id="logs">
+<div class="card"><div class="head"><h2>日志</h2><button class="btn ghost" id="refreshLogs">刷新日志</button></div><div class="body"><div class="metaItem" style="margin-bottom:12px"><span>日志文件</span><b id="logPath">-</b></div><div class="log" id="logBox">等待操作...</div></div></div>
+</section>
+
+</div></main></div>
 <script>
 const TOKEN='[[TOKEN]]';
 const $=id=>document.getElementById(id);
-const pages={overview:['总览','状态指标和设备概览'],console:['快捷控制台','更多常用 ADB 操作入口'],device:['设备信息','系统、Virtual Desktop、手柄和电源线索'],settings:['高级 settings','谨慎写入 Android settings 或广播'],logs:['日志','最近一次操作结果']};
-const themeKey='questAdbThemeV6';
+const pages={overview:['总览','状态指标和设备概览'],console:['快捷控制台','更多常用 ADB 操作入口'],install:['应用安装','拖入 APK，用 ADB 安装到 Quest'],device:['设备信息','系统、Virtual Desktop、手柄和电源线索'],settings:['高级 settings','谨慎写入 Android settings 或广播'],logs:['日志','最近一次操作结果']};
+const themeKey='questAdbThemeV7';
 const confirmText={
   debug_mode:'会开启保持唤醒、Wi-Fi 不休眠、24 小时屏幕和 prox_close，只建议短时间调试。',
   keep_awake:'会写入保持唤醒、Wi-Fi 不休眠、24 小时屏幕、sleep_timeout=-1，并发送 prox_close。',
@@ -54,7 +329,7 @@ const paramDefs=[
   {key:'screenOff',name:'屏幕超时',setting:'system.screen_off_timeout',safe:'300000',action:'reset_screen_off',note:'单位毫秒；300000=5 分钟，86400000=24 小时'},
   {key:'sleepTimeout',name:'系统睡眠超时',setting:'secure.sleep_timeout',safe:'null',action:'reset_sleep_timeout',note:'null=系统默认；-1=不自动睡眠'}
 ];
-let last={},busy=false,pendingConfirm=null;
+let last={},busy=false,pendingConfirm=null,apk=null;
 function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 function empty(v){return v===undefined||v===null||v===''||v==='null'}
 function shown(v){return empty(v)?'-':String(v)}
@@ -62,32 +337,138 @@ function set(id,v){const e=$(id);if(e)e.textContent=shown(v)}
 function v(k){return shown(last[k]);}
 function notify(title,msg,type='ok',ms=3200){const host=$('toasts');if(!host)return;const el=document.createElement('div');el.className='toast '+type;el.innerHTML='<b>'+esc(title)+'</b><span>'+esc(msg||'')+'</span>';host.appendChild(el);requestAnimationFrame(()=>el.classList.add('show'));setTimeout(()=>{el.classList.remove('show');setTimeout(()=>el.remove(),220)},ms)}
 function showConfirm(action,label,extra=''){pendingConfirm={action,label,extra};$('confirmTitle').textContent='确认执行：'+label;$('confirmMsg').textContent=confirmText[action]||'这个操作会修改 Quest 状态。';$('confirmMask').classList.add('show')}
-function closeConfirm(){pendingConfirm=null;$('confirmMask').classList.remove('show')}
+function askConfirm(title,msg){return new Promise(res=>{pendingConfirm={custom:true,resolve:res};$('confirmTitle').textContent=title;$('confirmMsg').textContent=msg;$('confirmMask').classList.add('show')})}
+function closeConfirm(){const p=pendingConfirm;pendingConfirm=null;$('confirmMask').classList.remove('show');if(p&&p.custom&&p.resolve)p.resolve(false)}
 function theme(){const light=localStorage.getItem(themeKey)==='light';document.body.classList.toggle('dark',!light);$('themeBtn').textContent=light?'深色':'浅色'}
 function log(t){set('logBox',new Date().toLocaleTimeString()+'  '+t)}
-function shortPath(p){if(!p)return'adb.exe';const a=p.split(/[\\/]/);return a[a.length-1]||p}
+function shortPath(p){if(!p)return'adb.exe';const a=String(p).split(/[\\/]/);return a[a.length-1]||p}
 function pct(x,max=100){const n=parseFloat(x);return isFinite(n)?Math.max(0,Math.min(100,n/max*100)):0}
-function ring(id,text,label,p,mode){const box=$(id),m=box&&box.querySelector('.meter');if(!box||!m)return;m.setAttribute('stroke-dasharray',Math.round(p)+' 100');box.classList.remove('green','amber','red');if(mode)box.classList.add(mode);if(id==='batteryGauge'){set('batteryText',text);set('batterySub',label)}if(id==='tempGauge'){set('tempText',text);set('tempSub',label)}if(id==='sleepGauge'){set('sleepText',text);set('sleepSub',label)}}
-function norm(v){return shown(v).trim()}
+function ring(id,text,label,percent,cls){const box=$(id);if(!box)return;box.classList.remove('green','amber','red');if(cls)box.classList.add(cls);const meter=box.querySelector('.meter');if(meter)meter.setAttribute('stroke-dasharray',(percent||0)+' 100');if(id==='batteryGauge'){set('batteryText',text);set('batterySub',label)}if(id==='tempGauge'){set('tempText',text);set('tempSub',label)}if(id==='sleepGauge'){set('sleepText',text);set('sleepSub',label)}}
+function norm(x){return shown(x).trim()}
 function isSafeValue(def,value){const val=norm(value);if(def.safe==='null')return val==='null'||val==='-';return val===def.safe}
-function renderParams(){const host=$('paramList');if(!host)return;host.innerHTML='';let changed=0;const offline=last.connected!=='true';paramDefs.forEach(def=>{const val=norm(last[def.key]);const ok=!offline&&isSafeValue(def,val);if(!ok&&!offline)changed++;const item=document.createElement('div');item.className='paramItem '+(offline?'':ok?'ok':'changed');const state=offline?'未读取':(ok?'默认值':'已修改');item.innerHTML='<div class=\"paramName\"><b>'+esc(def.name)+'</b><span>'+esc(def.setting)+'</span></div><div class=\"paramValue\"><span>当前值</span><b>'+esc(val)+'</b></div><div class=\"paramValue\"><span>默认值</span><b>'+esc(def.safe)+'</b></div><div><span class=\"paramState\">'+esc(state)+'</span> '+(!offline&&!ok?'<button class=\"resetBtn primary\" data-reset=\"'+esc(def.action)+'\">重置</button>':'')+'</div><div class=\"paramName\" style=\"grid-column:1/-1\"><span>'+esc(def.note)+'</span></div>';host.appendChild(item)});set('paramSummary',offline?'未连接':changed?changed+' 项已修改':'全部默认');host.querySelectorAll('[data-reset]').forEach(btn=>btn.onclick=()=>action(btn.dataset.reset,'','重置参数',btn,false))}
-async function api(path,opts={}){const sep=path.includes('?')?'&':'?';const r=await fetch(path+sep+'token='+encodeURIComponent(TOKEN),Object.assign({cache:'no-store'},opts));if(!r.ok)throw new Error('HTTP '+r.status);return await r.json()}
+function renderParams(){const host=$('paramList');if(!host)return;host.innerHTML='';let changed=0;const offline=last.connected!=='true';paramDefs.forEach(def=>{const val=norm(last[def.key]);const ok=!offline&&isSafeValue(def,val);if(!ok&&!offline)changed++;const item=document.createElement('div');item.className='paramItem '+(offline?'':ok?'ok':'changed');const state=offline?'未读取':(ok?'默认值':'已修改');item.innerHTML='<div class="paramName"><b>'+esc(def.name)+'</b><span>'+esc(def.setting)+'</span></div><div class="paramValue"><span>当前值</span><b>'+esc(val)+'</b></div><div class="paramValue"><span>默认值</span><b>'+esc(def.safe)+'</b></div><div><span class="paramState">'+esc(state)+'</span> '+(!offline&&!ok?'<button class="resetBtn primary" data-reset="'+esc(def.action)+'">重置</button>':'')+'</div><div class="paramName" style="grid-column:1/-1"><span>'+esc(def.note)+'</span></div>';host.appendChild(item)});set('paramSummary',offline?'未连接':changed?changed+' 项已修改':'全部默认');host.querySelectorAll('[data-reset]').forEach(btn=>btn.onclick=()=>action(btn.dataset.reset,'','重置参数',btn,false))}
+async function api(path,opts={}){const o=Object.assign({cache:'no-store'},opts);o.headers=Object.assign({'X-Quest-Token':TOKEN},opts.headers||{});const r=await fetch(path,o);if(!r.ok)throw new Error('HTTP '+r.status);return await r.json()}
 async function loadLogs(showNotice=false){try{const r=await api('/api/logs');set('logPath',r.logFile);set('logBox',r.text||'暂无日志');if(showNotice)notify('日志已刷新',r.logFile||'-','ok')}catch(e){set('logBox','日志读取失败：'+e.message);if(showNotice)notify('日志读取失败',e.message,'err',4200)}}
-async function refresh(showNotice=false){try{last=await api('/api/status');const c=last.connected==='true';$('statusChip').classList.toggle('connected',c);$('statusChip').querySelector('span').textContent=c?'已连接':(last.deviceState==='unauthorized'?'未授权':last.deviceState==='offline'?'离线':'未连接');set('stateBig',last.deviceState||'none');$('stateBig').classList.toggle('good',c);set('stateHint',last.hint);set('heroModel',last.model&&last.model!=='-'?last.model:'Quest');set('deviceTag',last.deviceState||'none');set('adbShort',shortPath(last.adbPath));set('adbPathShort',shortPath(last.adbPath));set('wifiChip',v('wifiIp'));set('wifiIpLite',v('wifiIp'));set('leftControllerLite',v('controllerLeftBattery'));set('rightControllerLite',v('controllerRightBattery'));set('leftControllerState',v('controllerLeftStatus'));set('rightControllerState',v('controllerRightStatus'));set('socLite',v('soc'));set('displaySummaryLite',v('displaySummary'));set('thermalSummaryLite',v('thermalSummary'));set('factorySummaryLite',v('factorySummary'));set('clockText',new Date().toLocaleTimeString());const b=v('batteryLevel'),t=v('batteryTemp'),w=v('wakefulness'),bn=parseFloat(b),tn=parseFloat(t);ring('batteryGauge',b==='-'?'--%':b+'%','电量',pct(b),!isFinite(bn)?'':bn<20?'red':bn<45?'amber':'green');ring('tempGauge',t==='-'?'--°C':t+'°C','温度',pct(t,55),!isFinite(tn)?'':tn>=45?'red':tn>=38?'amber':'green');const awake=(w||'').toLowerCase().includes('awake');ring('sleepGauge',w==='-'?'-':w,last.mStayOn==='true'?'保持唤醒':'休眠',awake?100:28,awake?'amber':'green');Object.keys(last).forEach(k=>set(k,last[k]));set('powerSource2',last.powerSource);set('logPath',last.logFile);set('consoleState',last.deviceState);set('consoleConn',c?'已连接':'未连接');set('consoleBattery',b==='-'?'-':b+'%');set('consoleWake',w);set('consoleWifi',v('wifiIp'));renderParams();if(showNotice)notify('刷新完成',c?'已连接：'+(last.model||'Quest')+'，电量 '+b+'%':(last.hint||'未连接'),c?'ok':'warn')}catch(e){log('刷新失败：'+e.message);renderParams();if(showNotice)notify('刷新失败',e.message,'err',4200)}}
+async function refresh(showNotice=false){try{last=await api('/api/status');const c=last.connected==='true';$('statusChip').classList.toggle('connected',c);$('statusChip').querySelector('span').textContent=c?'已连接':(last.deviceState==='unauthorized'?'未授权':last.deviceState==='offline'?'离线':'未连接');set('stateBig',last.deviceState||'none');$('stateBig').classList.toggle('good',c);set('stateHint',last.hint);set('heroModel',last.model&&last.model!=='-'?last.model:'Quest');set('deviceTag',last.deviceState||'none');set('adbShort',shortPath(last.adbPath));set('wifiChip',v('wifiIp'));set('wifiIpLite',v('wifiIp'));set('leftControllerLite',v('controllerLeftBattery'));set('rightControllerLite',v('controllerRightBattery'));set('leftControllerState',v('controllerLeftStatus'));set('rightControllerState',v('controllerRightStatus'));set('clockText',new Date().toLocaleTimeString());const b=v('batteryLevel'),t=v('batteryTemp'),w=v('wakefulness'),bn=parseFloat(b),tn=parseFloat(t);ring('batteryGauge',b==='-'?'--%':b+'%','电量',pct(b),!isFinite(bn)?'':bn<20?'red':bn<45?'amber':'green');ring('tempGauge',t==='-'?'--°C':t+'°C','温度',pct(t,55),!isFinite(tn)?'':tn>=45?'red':tn>=38?'amber':'green');const awake=(w||'').toLowerCase().includes('awake');ring('sleepGauge',w==='-'?'-':w,last.mStayOn==='true'?'保持唤醒':'休眠',awake?100:28,awake?'amber':'green');Object.keys(last).forEach(k=>set(k,last[k]));set('powerSource2',last.powerSource);set('logPath',last.logFile);set('consoleState',last.deviceState);set('consoleConn',c?'已连接':'未连接');set('consoleBattery',b==='-'?'-':b+'%');set('consoleWake',w);set('consoleWifi',v('wifiIp'));renderParams();if(showNotice)notify('刷新完成',c?'已连接：'+(last.model||'Quest')+'，电量 '+b+'%':(last.hint||'未连接'),c?'ok':'warn')}catch(e){log('刷新失败：'+e.message);renderParams();if(showNotice)notify('刷新失败',e.message,'err',4200)}}
 function setBusy(on,btn){busy=on;document.querySelectorAll('button').forEach(b=>b.disabled=on);if(btn)btn.classList.toggle('is-busy',on)}
 async function action(a,extra='',label='操作',btn=null,confirmed=false){if(busy)return notify('已有操作执行中','请等待上一条命令完成。','warn');try{setBusy(true,btn);log('执行中：'+label);notify(label,'正在发送命令...','warn',1800);let url='/api/action?action='+encodeURIComponent(a)+extra;if(confirmed)url+='&confirm=YES';const r=await api(url,{method:'POST'});if(r.ok!=='true')throw new Error(r.error||'操作失败');log(r.result||'完成');notify(label+'完成',r.result||'完成','ok');setTimeout(()=>{refresh(false);loadLogs(false)},500)}catch(e){log('操作失败：'+e.message);notify(label+'失败',e.message,'err',4600);loadLogs(false)}finally{setBusy(false,btn)}}
-async function exportHtml(){if(busy)return notify('已有操作执行中','请等待上一条命令完成。','warn');const btn=$('exportBtn');try{setBusy(true,btn);set('exportStatus','正在只读采集完整设备信息，可能需要 10-40 秒...');$('exportLinks').innerHTML='';notify('开始导出','正在生成私有完整版和分享安全版 HTML','warn',2200);const r=await api('/api/export?mode=both',{method:'POST'});if(r.ok!=='true')throw new Error(r.error||'导出失败');set('exportStatus','导出完成：'+(r.sectionCount||'-')+' 个采集段，耗时 '+Math.round((parseInt(r.durationMs||'0',10)||0)/1000)+' 秒。');$('exportLinks').innerHTML='<a target=\"_blank\" href=\"'+esc(r.privateUrl)+'\">打开私有完整版 HTML</a><a target=\"_blank\" href=\"'+esc(r.safeUrl)+'\">打开分享安全版 HTML</a><span>'+esc(r.safePath||'')+'</span>';notify('导出完成','已生成两份 HTML 报告','ok');loadLogs(false)}catch(e){set('exportStatus','导出失败：'+e.message);notify('导出失败',e.message,'err',5200);loadLogs(false)}finally{setBusy(false,btn)}}
+async function exportHtml(){if(busy)return notify('已有操作执行中','请等待上一条命令完成。','warn');const btn=$('exportBtn');try{setBusy(true,btn);set('exportStatus','正在只读采集完整设备信息，可能需要 10-40 秒...');$('exportLinks').innerHTML='';notify('开始导出','正在生成私有完整版和分享安全版 HTML','warn',2200);const r=await api('/api/export?mode=both',{method:'POST'});if(r.ok!=='true')throw new Error(r.error||'导出失败');set('exportStatus','导出完成：'+(r.sectionCount||'-')+' 个采集段，耗时 '+Math.round((parseInt(r.durationMs||'0',10)||0)/1000)+' 秒。');$('exportLinks').innerHTML='<a target="_blank" href="'+esc(r.privateUrl)+'">打开私有完整版 HTML</a><a target="_blank" href="'+esc(r.safeUrl)+'">打开分享安全版 HTML</a><span>'+esc(r.safePath||'')+'</span>';notify('导出完成','已生成两份 HTML 报告','ok');loadLogs(false)}catch(e){set('exportStatus','导出失败：'+e.message);notify('导出失败',e.message,'err',5200);loadLogs(false)}finally{setBusy(false,btn)}}
+
+/* ---------- APK installer (App Store card + SSE progress) ---------- */
+function resetApk(){apk=null;$('apkDetail').style.display='none';$('apkDrop').style.display='';$('apkPerms').classList.remove('show');$('adbOut').classList.remove('show');$('adbOut').textContent='';$('stageRow').classList.remove('show');const b=$('installBtn');b.className='installBtn';b.disabled=false;$('installFill').style.width='0';$('installLabel').textContent='安装到 Quest';$('appCard').classList.remove('glow')}
+function uploadApk(file){
+  if(busy)return notify('已有操作执行中','请等待上一条命令完成。','warn');
+  if(!file)return;
+  if(!/\.apk$/i.test(file.name))return notify('文件类型不支持','请选择 .apk 文件。','warn');
+  // show a lightweight uploading state on the drop tile
+  const drop=$('apkDrop');drop.querySelector('b').textContent='正在上传 '+file.name+' …';
+  const xhr=new XMLHttpRequest();
+  xhr.open('POST','/api/apk/upload?name='+encodeURIComponent(file.name));
+  xhr.setRequestHeader('X-Quest-Token',TOKEN);
+  xhr.setRequestHeader('Content-Type','application/octet-stream');
+  xhr.upload.onprogress=e=>{if(e.lengthComputable){const p=Math.round(e.loaded/e.total*100);drop.querySelector('#dropHint').textContent='上传中 '+p+'%'}};
+  setBusy(true,null);
+  xhr.onload=()=>{setBusy(false,null);try{const r=JSON.parse(xhr.responseText);if(r.ok!=='true')throw new Error(r.error||'上传失败');apk=r;showApk(r);notify('上传完成',(r.package||r.fileName)+' 已解析','ok')}catch(e){notify('上传失败',e.message,'err',5000);drop.querySelector('b').textContent='拖拽 APK 到这里，或点击选择';drop.querySelector('#dropHint').textContent='本地上传后由 ADB 安装到已连接的 Quest。安装前会二次确认。'}};
+  xhr.onerror=()=>{setBusy(false,null);notify('上传失败','网络错误','err');drop.querySelector('b').textContent='拖拽 APK 到这里，或点击选择'};
+  xhr.send(file);
+}
+function showApk(r){
+  // hero
+  const initial=(r.package||r.fileName||'A').replace(/^.*\./,'').charAt(0).toUpperCase()||'A';
+  $('apkIconTile').innerHTML='<svg viewBox="0 0 24 24"><use href="#i-apk"/></svg>';
+  set('apkName',r.package||r.fileName||'app.apk');
+  // pills: version, size, perm-count
+  const perms=(r.permissions||'').split('\n').filter(x=>x);
+  const pc=r.permissionCount||perms.length||0;
+  let pills='';
+  if(r.versionName||r.versionCode)pills+='<span class="pill ver">v'+esc(r.versionName||'?')+(r.versionCode?' ('+esc(r.versionCode)+')':'')+'</span>';
+  if(r.sizeText)pills+='<span class="pill">'+esc(r.sizeText)+'</span>';
+  pills+='<span class="pill perm" id="permPill">权限 '+pc+'</span>';
+  if(r.parseOk!=='true')pills+='<span class="pill warn">解析受限</span>';
+  $('apkPills').innerHTML=pills;
+  // version badge (upgrade/downgrade/same)
+  const badge=$('apkVerBadge');badge.className='verBadge';
+  if(r.alreadyInstalled==='true'){
+    const iv=parseInt(r.installedVersionCode||'0',10),nv=parseInt(r.versionCode||'0',10);
+    if(nv&&iv){if(nv<iv){badge.className='verBadge show down';badge.textContent='⚠ 降级：设备 v'+iv+' → APK v'+nv+'（默认已勾选允许降级）';$('optDowngrade').checked=true}
+      else if(nv===iv){badge.className='verBadge show';badge.textContent='版本相同 v'+iv+'（重装保留数据）'}
+      else{badge.className='verBadge show up';badge.textContent='升级：设备 v'+iv+' → APK v'+nv}}
+    else{badge.className='verBadge show';badge.textContent='设备已安装 v'+esc(r.installedVersionCode)}
+    $('optReplace').checked=true;
+  }
+  $('apkPerms').textContent=perms.length?perms.join('\n'):'（未解析到权限声明）';
+  $('apkPerms').classList.remove('show');
+  $('apkDrop').style.display='none';
+  $('apkDetail').style.display='';
+}
+async function installApk(){
+  if(!apk||!apk.uploadId)return notify('请先上传 APK','拖入或选择一个 .apk 文件。','warn');
+  if(busy)return notify('已有操作执行中','请等待上一条命令完成。','warn');
+  const r=apk;
+  const opts=[];if($('optReplace').checked)opts.push('-r');if($('optGrant').checked)opts.push('-g');if($('optDowngrade').checked)opts.push('-d');
+  const uf=$('optUninstallFirst').checked;
+  const cmd='adb -s <device> install '+opts.join(' ')+' '+(r.fileName||'app.apk');
+  const msg='即将执行：\n'+cmd+(uf?'\n（安装前会先卸载 '+(r.package||'该包')+'，清除其数据）':'')+'\n\n目标：'+(r.package||'未知包名')+'  '+(r.versionName||'');
+  const ok=await askConfirm('确认安装 APK',msg);
+  if(!ok)return;
+  const btn=$('installBtn'),fill=$('installFill'),label=$('installLabel'),stageRow=$('stageRow'),out=$('adbOut');
+  // enter installing state: button morphs into a progress track
+  setBusy(true,null);btn.disabled=true;btn.className='installBtn installing';fill.style.width='0';
+  label.textContent='安装中 0%';stageRow.classList.add('show');set('stageText','连接中…');out.classList.add('show');out.textContent='';
+  const t0=Date.now();const timer=setInterval(()=>{const s=Math.floor((Date.now()-t0)/1000);set('elapsed',Math.floor(s/60)+':'+String(s%60).padStart(2,'0'))},250);
+  let curPct=0;
+  function setPct(p){curPct=Math.max(curPct,p);fill.style.width=curPct+'%';label.textContent='安装中 '+curPct+'%'}
+  let qs='/api/apk/install-stream?confirm=YES&token='+encodeURIComponent(TOKEN)+'&uploadId='+encodeURIComponent(r.uploadId);
+  qs+='&replace='+($('optReplace').checked?1:0)+'&grant='+($('optGrant').checked?1:0)+'&downgrade='+($('optDowngrade').checked?1:0)+'&uninstallFirst='+(uf?1:0);
+  if(r.package)qs+='&package='+encodeURIComponent(r.package);
+  notify('开始安装',r.package||r.fileName,'warn',2000);
+  const es=new EventSource(qs);
+  function appendOut(line){out.textContent+=(out.textContent?'\n':'')+line;out.scrollTop=out.scrollHeight}
+  es.addEventListener('stage',e=>{try{const d=JSON.parse(e.data);set('stageText',d.text||'');if(d.percent)setPct(parseInt(d.percent,10)||0)}catch(_){}});
+  es.addEventListener('output',e=>{try{const d=JSON.parse(e.data);if(d.line)appendOut(d.line)}catch(_){}});
+  es.addEventListener('done',e=>{
+    es.close();clearInterval(timer);setBusy(false,null);btn.disabled=false;
+    let d={};try{d=JSON.parse(e.data)}catch(_){}
+    if(d.ok==='true'){
+      setPct(100);btn.className='installBtn done';
+      label.innerHTML='<svg class="chk" viewBox="0 0 24 24"><path d="M4 12l5 5l11-11"/></svg> 安装成功';
+      set('stageText','完成');$('appCard').classList.add('glow');
+      notify('安装成功',d.message||r.package||r.fileName,'ok',4600);refresh(false);loadLogs(false);
+    }else{
+      btn.className='installBtn failed';label.textContent='安装失败';
+      set('stageText',d.message||'安装失败');
+      notify('安装失败',d.message||'安装失败','err',6000);loadLogs(false);
+      // let the user retry: revert the button to idle after a moment
+      setTimeout(()=>{btn.className='installBtn';label.textContent='重试安装';fill.style.width='0'},2600);
+    }
+  });
+  es.onerror=()=>{es.close();clearInterval(timer);setBusy(false,null);btn.disabled=false;btn.className='installBtn failed';label.textContent='连接中断';set('stageText','与本地服务的连接中断');notify('安装中断','SSE 连接错误','err',5000);setTimeout(()=>{btn.className='installBtn';label.textContent='重试安装';fill.style.width='0'},2600)};
+}
+function initInstaller(){
+  const drop=$('apkDrop'),file=$('apkFile');
+  drop.onclick=()=>file.click();
+  file.onchange=()=>{if(file.files&&file.files[0])uploadApk(file.files[0]);file.value=''};
+  ['dragenter','dragover'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.add('over')}));
+  ['dragleave','drop'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();if(ev==='dragleave'&&drop.contains(e.relatedTarget))return;drop.classList.remove('over')}));
+  drop.addEventListener('drop',e=>{const f=e.dataTransfer&&e.dataTransfer.files&&e.dataTransfer.files[0];if(f)uploadApk(f)});
+  const page=$('install');page.addEventListener('dragover',e=>e.preventDefault());page.addEventListener('drop',e=>{e.preventDefault();const f=e.dataTransfer&&e.dataTransfer.files&&e.dataTransfer.files[0];if(f&&/\.apk$/i.test(f.name))uploadApk(f)});
+  $('installBtn').onclick=installApk;
+  $('apkPermsBtn').onclick=e=>{e.preventDefault();$('apkPerms').classList.toggle('show')};
+  $('apkReset').onclick=e=>{e.preventDefault();$('apkDrop').querySelector('b').textContent='拖拽 APK 到这里，或点击选择';$('apkDrop').querySelector('#dropHint').textContent='本地上传后由 ADB 安装到已连接的 Quest。安装前会二次确认。';resetApk()};
+  // clicking the perm pill also opens perms
+  document.addEventListener('click',e=>{if(e.target&&e.target.id==='permPill')$('apkPerms').classList.toggle('show')});
+}
+
+/* ---------- wiring ---------- */
 document.querySelectorAll('[data-action]').forEach(b=>b.onclick=()=>{const label=b.querySelector('b')?.textContent||b.dataset.action;if(b.classList.contains('dangerAction'))showConfirm(b.dataset.action,label,'');else action(b.dataset.action,'',label,b,false)});
-$('confirmCancel').onclick=closeConfirm;$('confirmOk').onclick=()=>{const p=pendingConfirm;closeConfirm();if(p)action(p.action,p.extra,p.label,null,true)};
+$('confirmCancel').onclick=closeConfirm;
+$('confirmOk').onclick=()=>{const p=pendingConfirm;pendingConfirm=null;$('confirmMask').classList.remove('show');if(!p)return;if(p.custom&&p.resolve){p.resolve(true);return}if(p)action(p.action,p.extra,p.label,null,true)};
 $('refreshBtn').onclick=()=>{notify('刷新状态','正在读取 Quest 状态...','warn',1600);refresh(true);loadLogs(false)};
-$('manualRefresh').onclick=()=>{notify('刷新状态','正在读取 Quest 状态...','warn',1600);refresh(true);loadLogs(false)};
 $('refreshLogs').onclick=()=>loadLogs(true);
 $('exportBtn').onclick=exportHtml;
-$('themeBtn').onclick=()=>{localStorage.setItem(themeKey,document.body.classList.contains('dark')?'light':'dark');theme();notify('主题已切换',$('themeBtn').textContent==='浅色'?'当前为深色模式':'当前为浅色模式','ok')};
+$('themeBtn').onclick=()=>{localStorage.setItem(themeKey,document.body.classList.contains('dark')?'light':'dark');theme();notify('主题已切换',document.body.classList.contains('dark')?'当前为深色模式':'当前为浅色模式','ok')};
 $('customSet').onclick=()=>showConfirm('custom_setting','写入 settings','&ns='+encodeURIComponent($('customNs').value)+'&key='+encodeURIComponent($('customKey').value)+'&value='+encodeURIComponent($('customValue').value));
 $('customBroadcast').onclick=()=>showConfirm('custom_broadcast','发送广播','&name='+encodeURIComponent($('broadcastName').value));
-$('goCustomBroadcast').onclick=()=>{location.hash='settings';notify('已切换','高级 settings','ok',1800)};
-$('goLogs').onclick=()=>{location.hash='logs';notify('已切换','日志','ok',1800)};
 function route(){const id=(location.hash||'#overview').slice(1);document.querySelectorAll('.page').forEach(p=>p.classList.toggle('active',p.id===id));document.querySelectorAll('.nav a').forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+id));const m=pages[id]||pages.overview;set('pageTitle',m[0]);set('pageSub',m[1]);if(id==='logs')loadLogs(false)}
-theme();addEventListener('hashchange',route);route();refresh();loadLogs(false);setInterval(()=>set('clockText',new Date().toLocaleTimeString()),1000);setInterval(()=>refresh(false),15000);
+theme();initInstaller();addEventListener('hashchange',route);route();refresh();loadLogs(false);setInterval(()=>set('clockText',new Date().toLocaleTimeString()),1000);setInterval(()=>refresh(false),15000);
 </script></body></html>

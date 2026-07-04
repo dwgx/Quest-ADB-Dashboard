@@ -54,6 +54,14 @@ for ($i = 0; $i -lt $exeB64.Length; $i += 64) {
 [void]$sb.AppendLine('exit /b 0')
 
 $newBat = ($sb.ToString()) -replace "`r?`n", "`r`n"
+
+# Stamp the known-good EXE SHA256 into the BAT so :verify_webui_hash can detect
+# a pre-planted/tampered cached EXE at the %TEMP% unpack path (audit finding M1).
+$exeSha256 = (Get-FileHash -Algorithm SHA256 -LiteralPath $exe).Hash.ToLowerInvariant()
+$shaPattern = '(?m)^set "WEBUI_EXE_SHA256=[^"]*"'
+if (![regex]::IsMatch($newBat, $shaPattern)) { throw 'WEBUI_EXE_SHA256 placeholder not found in BAT' }
+$newBat = [regex]::Replace($newBat, $shaPattern, 'set "WEBUI_EXE_SHA256=' + $exeSha256 + '"')
+
 [IO.File]::WriteAllText($bat, $newBat, $enc)
 
 Get-FileHash -Algorithm SHA256 -LiteralPath $bat

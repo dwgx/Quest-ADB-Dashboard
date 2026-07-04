@@ -11,13 +11,14 @@ MODULE_PATH = ROOT / "mcp" / "quest_adb_control_mcp.py"
 fake_mcp = types.ModuleType("mcp")
 fake_server = types.ModuleType("mcp.server")
 fake_fastmcp = types.ModuleType("mcp.server.fastmcp")
+fake_types = types.ModuleType("mcp.types")
 
 
 class FakeFastMCP:
     def __init__(self, *args, **kwargs):
         pass
 
-    def tool(self):
+    def tool(self, *args, **kwargs):
         def decorator(func):
             return func
 
@@ -27,10 +28,24 @@ class FakeFastMCP:
         raise AssertionError("Fake MCP server should not run during policy tests")
 
 
+class FakeImage:
+    def __init__(self, *args, **kwargs):
+        self.args = args
+        self.kwargs = kwargs
+
+
+class FakeToolAnnotations:
+    def __init__(self, **kwargs):
+        self.__dict__.update(kwargs)
+
+
 fake_fastmcp.FastMCP = FakeFastMCP
+fake_fastmcp.Image = FakeImage
+fake_types.ToolAnnotations = FakeToolAnnotations
 sys.modules.setdefault("mcp", fake_mcp)
 sys.modules.setdefault("mcp.server", fake_server)
 sys.modules.setdefault("mcp.server.fastmcp", fake_fastmcp)
+sys.modules.setdefault("mcp.types", fake_types)
 
 spec = importlib.util.spec_from_file_location("quest_adb_control_mcp", MODULE_PATH)
 module = importlib.util.module_from_spec(spec)
@@ -51,6 +66,61 @@ def assert_allowed(args):
 
 
 class ControlMcpPolicyTests(unittest.TestCase):
+    def test_parse_ui_nodes_extracts_centers_and_filters(self):
+        # uiautomator-style XML -> compact element list with server-computed centers.
+        xml = (
+            "UI hierarchy dumped to: /dev/tty"
+            "<?xml version='1.0' encoding='UTF-8'?>"
+            "<hierarchy rotation='0'>"
+            "<node text='Wi-Fi' resource-id='com.x:id/wifi' class='android.widget.TextView'"
+            " content-desc='' clickable='true' bounds='[100,200][300,260]' />"
+            "<node text='' resource-id='' content-desc='' clickable='false' bounds='[0,0][0,0]' />"
+            "<node text='' resource-id='' content-desc='Settings icon' clickable='true' bounds='[10,10][50,50]' />"
+            "</hierarchy>"
+        )
+        nodes = module._parse_ui_nodes(xml)
+        # the empty zero-size non-clickable node is dropped; two remain
+        self.assertEqual(len(nodes), 2)
+        wifi = nodes[0]
+        self.assertEqual(wifi["text"], "Wi-Fi")
+        self.assertEqual(wifi["center"], [200, 230])  # midpoint of [100,200]-[300,260]
+        self.assertTrue(wifi["clickable"])
+        self.assertEqual(wifi["resource_id"], "wifi")
+        self.assertEqual(nodes[1]["desc"], "Settings icon")
+
+    def test_parse_ui_nodes_bad_xml_returns_empty(self):
+        self.assertEqual(module._parse_ui_nodes("not xml at all"), [])
+        self.assertEqual(module._parse_ui_nodes(""), [])
+
+    def test_tap_element_unknown_id_is_helpful(self):
+        module._LAST_OBSERVATION["SERIAL"] = [{"id": 0, "center": [5, 5]}]
+        orig = module._select_device
+        module._select_device = lambda serial=None: {"ok": True, "device": {"serial": "SERIAL"}}
+        try:
+            out = module.tap_element(element_id=99, serial="SERIAL", confirm=False)
+        finally:
+            module._select_device = orig
+        self.assertFalse(out.get("ok"))
+        self.assertIn("observe_screen", out.get("error", ""))
+        self.assertEqual(out.get("available_ids"), [0])
+
+    def test_tap_accepts_display_id_in_preview(self):
+        orig = module._select_device
+        module._select_device = lambda serial=None: {"ok": True, "device": {"serial": "SERIAL"}}
+        try:
+            out = module.tap(x=640, y=400, display_id=7, serial="SERIAL", confirm=False)
+        finally:
+            module._select_device = orig
+        # preview must include the -d 7 targeting in the would_run string
+        self.assertTrue(out.get("requires_confirmation"))
+        self.assertIn("input -d 7 tap 640 400", out.get("would_run", ""))
+
+    def test_state_changing_tools_carry_reversible_annotation(self):
+        # Annotations are advisory but should be present and correctly shaped.
+        self.assertTrue(getattr(module.READ_ONLY, "readOnlyHint", False))
+        self.assertFalse(getattr(module.REVERSIBLE, "readOnlyHint", True))
+        self.assertFalse(getattr(module.REVERSIBLE, "destructiveHint", True))
+
     def test_keyevent_accepts_short_and_full_forms(self):
         # send_keyevent should accept both "HOME" and "KEYCODE_HOME" (the form
         # adb uses and the one LLMs reach for first). Verified live on hardware.
@@ -106,6 +176,14 @@ class ControlMcpPolicyTests(unittest.TestCase):
                 out = module.input_text(text=bad, serial="SERIAL", confirm=True)
                 self.assertFalse(out.get("ok"), bad)
                 self.assertIn("metacharacter", out.get("error", ""))
+
+    def test_input_text_tool_rejects_bare_percent(self):
+        # A literal `%` conflicts with `adb shell input text` %s escaping.
+        for bad in ["100%", "%s", "a%b"]:
+            with self.subTest(bad=bad):
+                out = module.input_text(text=bad, serial="SERIAL", confirm=True)
+                self.assertFalse(out.get("ok"), bad)
+                self.assertIn("%", out.get("error", ""))
 
     def test_string_false_does_not_confirm(self):
         # bool("false") is True in Python; the strict gate must treat it as preview.
@@ -186,6 +264,19 @@ class ControlMcpPolicyTests(unittest.TestCase):
         ]:
             with self.subTest(command=command):
                 assert_allowed(["-s", "SERIAL", "shell", command])
+
+    def test_control_policy_matches_enforced_sets(self):
+        # The published policy must be derived from the enforced constants so
+        # the two cannot silently drift apart.
+        policy = module.control_policy()
+        self.assertEqual(
+            policy["hard_blocked_adb"],
+            sorted(module.BLOCKED_ADB_COMMANDS),
+        )
+        self.assertEqual(
+            policy["hard_blocked_shell_prefixes"],
+            [" ".join(p) for p in module.BLOCKED_SHELL_PREFIXES],
+        )
 
     def test_keyevent_whitelist_rejects_unknown_keys(self):
         # unknown key is rejected before any device selection runs

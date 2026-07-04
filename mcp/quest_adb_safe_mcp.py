@@ -134,6 +134,20 @@ BLOCKED_SHELL_PREFIXES = (
 SERIAL_RE = re.compile(r"^[A-Za-z0-9._:-]{1,128}$")
 
 
+def _sdk_root_candidates() -> list[str]:
+    # Generic scan for platform-tools\adb.exe under common Android SDK roots on
+    # each available drive. Replaces an author-specific hardcoded path while
+    # staying discoverable on machines where adb is not on PATH.
+    found: list[str] = []
+    for drive in ("C:", "D:", "E:"):
+        if not Path(drive + "\\").exists():
+            continue
+        for sub in (r"\Software\Android\Sdk\platform-tools\adb.exe",
+                    r"\Android\Sdk\platform-tools\adb.exe"):
+            found.append(drive + sub)
+    return found
+
+
 def _find_adb() -> str:
     env_adb = os.environ.get("ADB_EXE")
     candidates = [
@@ -143,7 +157,7 @@ def _find_adb() -> str:
         str(ROOT / "platform-tools" / "adb.exe"),
         str(ROOT / "tools" / "adb.exe"),
         str(Path(os.environ.get("LOCALAPPDATA", "")) / "Android" / "Sdk" / "platform-tools" / "adb.exe"),
-        r"D:\Software\Android\Sdk\platform-tools\adb.exe",
+        *_sdk_root_candidates(),
         str(Path(os.environ.get("ProgramFiles", r"C:\Program Files")) / "Android" / "platform-tools" / "adb.exe"),
         str(Path(os.environ.get("ProgramFiles(x86)", r"C:\Program Files (x86)")) / "Android" / "platform-tools" / "adb.exe"),
         str(Path(os.environ.get("ProgramFiles", r"C:\Program Files")) / "SideQuest" / "resources" / "app.asar.unpacked" / "build" / "platform-tools" / "adb.exe"),

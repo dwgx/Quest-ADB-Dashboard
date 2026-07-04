@@ -1,17 +1,32 @@
 # Quest ADB Dashboard
 
-Single-file Windows BAT tool with a local WebUI for Meta Quest ADB status, troubleshooting, and share-safe HTML device audit reports.
+Audit and sideload your Meta Quest over ADB — one file, bundled ADB, local WebUI.
 
-Author test device: **Meta Quest 3** (`eureka`). Most read-only Android/ADB inventory features should work on other Quest headsets after USB debugging is authorized, but the documented observations are Quest 3 focused.
+Point it at a headset and you get a local control panel: inspect device state,
+generate share-safe audit reports, and install APKs with live progress — all
+served on `127.0.0.1`, with `adb.exe` bundled so there is no SDK to set up.
+
+Built around one principle: **evidence, not guessing.** Every reported value is
+traceable to the command that produced it, state changes are quarantined behind
+explicit confirmation, and the read-only paths stay read-only. Verified on Meta
+Quest 3 (`eureka`); most read-only features work on other Quest headsets once
+USB debugging is authorized.
 
 ![Share-safe Quest 3 report preview](examples/sample_quest3_share_safe.png)
 
 ## What It Does
 
-- Finds `adb.exe` from common Windows locations, including Android platform-tools and VIVE Hub installs under `C:\Program Files` or `D:\Software`.
+- Bundles Google `platform-tools` (`adb.exe`) in the release archive, so a
+  fresh download works without a separate Android SDK install. If you prefer
+  your own ADB, the tool still finds one from `ADB_EXE`, PATH, and common
+  Android platform-tools / SideQuest / Meta Quest Developer Hub / VIVE Hub
+  locations under `C:\Program Files` or `D:\Software`.
 - Runs as one end-user file: `dist/Quest_ADB_Tools.bat`.
 - Starts a local WebUI bound to `127.0.0.1`.
 - Shows connection, battery, power, Wi-Fi, storage, memory, display, thermal, controller hints, build metadata, and factory/calibration clues.
+- Installs an APK from the browser: drag a file onto the **应用安装** page to
+  see its package, version, and permissions, then confirm to `adb install`
+  (with reinstall / grant-permissions / downgrade options).
 - Provides an optional read-only MCP server for CI/agent inventory workflows.
 - Exports two standalone HTML reports:
   - `share-safe`: redacted report intended for support posts, GitHub issues, and screenshots.
@@ -33,6 +48,12 @@ The **HTML export path is read-only**. It uses public ADB reads such as:
 - `pm list features`
 
 The broader WebUI and BAT menu also contain interactive convenience actions for sleep, wake, keep-awake, wireless ADB, restore, and custom settings. Those actions are separate from export and can change headset state. Use them only when you understand the effect.
+
+APK install lives only in the WebUI and is state-changing. The browser uploads
+the APK to the local server, which parses it and shows the exact `adb install`
+command and target package; nothing installs until you confirm. Install and
+uninstall are deliberately **not** available in either MCP server, so an agent
+cannot silently modify the device.
 
 The project ships two MCP servers. The default one is read-only: it exposes
 only ADB inventory tools and has no generic shell, install, uninstall, push,
@@ -56,9 +77,16 @@ touches nothing until you confirm, and it hard-blocks irreversible families
 dist\Quest_ADB_Tools.bat
 ```
 
+   The release archive already ships `adb.exe` next to the BAT, so no separate
+   Android SDK install is required. To use your own ADB instead, set `ADB_EXE`
+   or put `adb.exe` on PATH.
+
 4. Press `W` to open the local WebUI.
 5. Use **一键导出设备全部信息** to create both HTML reports.
 6. Share only the `share-safe` report after manual review.
+
+To install an APK, open the WebUI, go to the **应用安装** page, drag an `.apk`
+onto it, review the parsed package/version/permissions, then confirm.
 
 ## Public Sharing Checklist
 
@@ -89,6 +117,7 @@ Example reports in `examples/` use synthetic Quest 3-like data. The private exam
 ```text
 dist/
   Quest_ADB_Tools.bat        End-user single-file tool.
+  adb.exe                    Bundled ADB (release archive only; not in git).
 src/
   QuestAdbWebUi.cs           Local 127.0.0.1 WebUI server and report generator.
   QuestAdbWebUi.html         Embedded WebUI frontend.

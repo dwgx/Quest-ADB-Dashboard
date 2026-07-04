@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
+using System.IO.Compression;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
@@ -134,29 +135,58 @@ class QuestAdbWebUi
     {
         using (client)
         {
-            client.ReceiveTimeout = 10000;
-            client.SendTimeout = 10000;
+            // Uploads (APK) can take a while to stream over loopback, so allow
+            // more generous socket timeouts than the old 10s read/write.
+            client.ReceiveTimeout = 120000;
+            client.SendTimeout = 120000;
             Stream stream = client.GetStream();
-            StreamReader reader = new StreamReader(stream, Encoding.UTF8);
-            string first = reader.ReadLine();
-            if (string.IsNullOrEmpty(first)) return;
-            string[] parts = first.Split(' ');
+
+            // Read the raw request head (request line + headers) up to the
+            // CRLFCRLF boundary as raw bytes. We deliberately do NOT wrap the
+            // stream in a StreamReader: a StreamReader buffers ahead, so a
+            // later raw binary read of the body (needed for APK upload) would
+            // lose bytes the reader already swallowed. Headers are ASCII; the
+            // body is read separately by Content-Length.
+            byte[] head;
+            if (!ReadRequestHead(stream, out head)) return;
+            string headText = Encoding.ASCII.GetString(head);
+            string[] headLines = headText.Split(new string[] { "\r\n" }, StringSplitOptions.None);
+            if (headLines.Length == 0 || string.IsNullOrEmpty(headLines[0])) return;
+            string[] parts = headLines[0].Split(' ');
             if (parts.Length < 2) return;
             string method = parts[0].ToUpperInvariant();
             string target = parts[1];
-            string line;
-            do { line = reader.ReadLine(); } while (!string.IsNullOrEmpty(line));
+
+            long contentLength = 0;
+            string headerToken = "";
+            for (int i = 1; i < headLines.Length; i++)
+            {
+                string hl = headLines[i];
+                if (hl.Length == 0) continue;
+                int colon = hl.IndexOf(':');
+                if (colon < 0) continue;
+                string hname = hl.Substring(0, colon).Trim().ToLowerInvariant();
+                string hval = hl.Substring(colon + 1).Trim();
+                if (hname == "content-length") { long.TryParse(hval, out contentLength); }
+                else if (hname == "x-quest-token") { headerToken = hval; }
+            }
 
             Uri uri = new Uri("http://127.0.0.1:" + Port + target);
+            // API auth accepts the token via the X-Quest-Token header (used by
+            // the SPA's fetch calls) OR the ?token= query param (kept so that
+            // report links opened in a new browser tab still authenticate,
+            // since navigation cannot set request headers).
+            bool authed = headerToken == Token || Query(uri.Query, "token") == Token;
+
             if (uri.AbsolutePath == "/api/status")
             {
-                if (!CheckToken(uri.Query)) { WriteJson(stream, Error("token 无效")); return; }
+                if (!authed) { WriteJson(stream, Error("token 无效")); return; }
                 WriteJson(stream, Status());
                 return;
             }
             if (uri.AbsolutePath == "/api/action")
             {
-                if (!CheckToken(uri.Query)) { WriteJson(stream, Error("token 无效")); return; }
+                if (!authed) { WriteJson(stream, Error("token 无效")); return; }
                 if (method != "POST") { WriteJson(stream, Error("修改操作必须使用 POST 请求。")); return; }
                 string action = Query(uri.Query, "action");
                 if (DangerousAction(action) && Query(uri.Query, "confirm") != "YES")
@@ -169,20 +199,49 @@ class QuestAdbWebUi
             }
             if (uri.AbsolutePath == "/api/logs")
             {
-                if (!CheckToken(uri.Query)) { WriteJson(stream, Error("token 无效")); return; }
+                if (!authed) { WriteJson(stream, Error("token 无效")); return; }
                 WriteJson(stream, Logs());
                 return;
             }
             if (uri.AbsolutePath == "/api/export")
             {
-                if (!CheckToken(uri.Query)) { WriteJson(stream, Error("token 无效")); return; }
+                if (!authed) { WriteJson(stream, Error("token 无效")); return; }
                 if (method != "POST") { WriteJson(stream, Error("导出必须使用 POST 请求。")); return; }
                 WriteJson(stream, ExportReport());
                 return;
             }
+            if (uri.AbsolutePath == "/api/apk/upload")
+            {
+                if (!authed) { DrainBody(stream, contentLength); WriteJson(stream, Error("token 无效")); return; }
+                if (method != "POST") { DrainBody(stream, contentLength); WriteJson(stream, Error("上传必须使用 POST 请求。")); return; }
+                WriteJson(stream, ApkUpload(stream, uri.Query, contentLength));
+                return;
+            }
+            if (uri.AbsolutePath == "/api/apk/install")
+            {
+                if (!authed) { WriteJson(stream, Error("token 无效")); return; }
+                if (method != "POST") { WriteJson(stream, Error("安装必须使用 POST 请求。")); return; }
+                // APK install changes device state, so it carries the same
+                // explicit second-confirmation contract as other dangerous
+                // actions. The read-only MCP path never exposes install at all.
+                if (Query(uri.Query, "confirm") != "YES") { WriteJson(stream, Error("安装 APK 需要二次确认。")); return; }
+                WriteJson(stream, ApkInstall(uri.Query));
+                return;
+            }
+            if (uri.AbsolutePath == "/api/apk/install-stream")
+            {
+                if (!authed) { WriteJson(stream, Error("token 无效")); return; }
+                if (Query(uri.Query, "confirm") != "YES") { WriteJson(stream, Error("安装 APK 需要二次确认。")); return; }
+                // Streamed install: Server-Sent Events over the raw socket.
+                // The install can take minutes for a large APK, so widen the
+                // send timeout for this connection.
+                try { client.SendTimeout = 600000; } catch { }
+                ApkInstallStream(stream, uri.Query);
+                return;
+            }
             if (uri.AbsolutePath.StartsWith("/exports/", StringComparison.OrdinalIgnoreCase))
             {
-                if (!CheckToken(uri.Query)) { WriteBytes(stream, "text/plain; charset=utf-8", Encoding.UTF8.GetBytes("token 无效")); return; }
+                if (Query(uri.Query, "token") != Token) { WriteBytes(stream, "text/plain; charset=utf-8", Encoding.UTF8.GetBytes("token 无效")); return; }
                 ServeExport(stream, uri.AbsolutePath);
                 return;
             }
@@ -193,6 +252,72 @@ class QuestAdbWebUi
             }
             WriteBytes(stream, "text/html; charset=utf-8", Encoding.UTF8.GetBytes(Html()));
         }
+    }
+
+    // Reads the request head (everything up to and including CRLFCRLF) as raw
+    // bytes. Returns false if the connection closed or the head exceeded the
+    // 64 KiB cap before a terminator was seen.
+    static bool ReadRequestHead(Stream stream, out byte[] head)
+    {
+        head = null;
+        List<byte> buf = new List<byte>(2048);
+        byte[] one = new byte[1];
+        int matched = 0; // progress through \r \n \r \n
+        int maxHead = 64 * 1024;
+        while (buf.Count < maxHead)
+        {
+            int n = stream.Read(one, 0, 1);
+            if (n <= 0) break;
+            byte b = one[0];
+            buf.Add(b);
+            if (b == 13) matched = (matched == 2) ? 3 : 1;
+            else if (b == 10 && (matched == 1 || matched == 3)) matched++;
+            else matched = 0;
+            if (matched == 4) { head = buf.ToArray(); return true; }
+        }
+        return false;
+    }
+
+    // Streams up to contentLength body bytes to a file, capped at maxBytes.
+    // Returns the number of bytes actually written, or -1 if the cap was hit.
+    static long StreamBodyToFile(Stream stream, long contentLength, string path, long maxBytes)
+    {
+        long remaining = contentLength;
+        long written = 0;
+        byte[] buffer = new byte[65536];
+        using (FileStream fs = new FileStream(path, FileMode.Create, FileAccess.Write))
+        {
+            while (remaining > 0)
+            {
+                int want = (int)Math.Min((long)buffer.Length, remaining);
+                int n = stream.Read(buffer, 0, want);
+                if (n <= 0) break;
+                if (written + n > maxBytes) { fs.Flush(); return -1; }
+                fs.Write(buffer, 0, n);
+                written += n;
+                remaining -= n;
+            }
+        }
+        return written;
+    }
+
+    // Discards a request body (used when rejecting a POST before reading it,
+    // so the socket is left in a clean state for the response).
+    static void DrainBody(Stream stream, long contentLength)
+    {
+        try
+        {
+            long remaining = contentLength;
+            byte[] buffer = new byte[65536];
+            while (remaining > 0)
+            {
+                int want = (int)Math.Min((long)buffer.Length, remaining);
+                int n = stream.Read(buffer, 0, want);
+                if (n <= 0) break;
+                remaining -= n;
+            }
+        }
+        catch { }
     }
 
     static Dictionary<string, string> Status()
@@ -380,6 +505,655 @@ class QuestAdbWebUi
         {
             WriteBytes(stream, "text/plain; charset=utf-8", Encoding.UTF8.GetBytes("读取报告失败：" + ex.Message));
         }
+    }
+
+    // --- APK metadata parsing (self-contained ZIP + binary-XML reader) ---
+    //
+    // We avoid ZipFile/ZipArchive (unreliable across target FW versions) and
+    // read the ZIP structures by hand, then decode Android's binary XML (AXML)
+    // AndroidManifest.xml to pull package / versionName / versionCode / perms.
+
+    class ApkInfo
+    {
+        public bool Ok = false;
+        public string Error = "";
+        public string Package = "";
+        public string VersionName = "";
+        public string VersionCode = "";
+        public List<string> Permissions = new List<string>();
+    }
+
+    static int LE16(byte[] b, int p) { return b[p] | (b[p + 1] << 8); }
+    static long LE32(byte[] b, int p) { return (long)((uint)b[p] | ((uint)b[p + 1] << 8) | ((uint)b[p + 2] << 16) | ((uint)b[p + 3] << 24)); }
+
+    static ApkInfo ParseApk(string apkPath)
+    {
+        ApkInfo info = new ApkInfo();
+        try
+        {
+            using (FileStream fs = new FileStream(apkPath, FileMode.Open, FileAccess.Read))
+            {
+                byte[] manifest = ExtractZipEntry(fs, "AndroidManifest.xml");
+                if (manifest == null) { info.Error = "APK 内未找到 AndroidManifest.xml"; return info; }
+                ParseAxml(manifest, info);
+            }
+            info.Ok = info.Package.Length > 0;
+            if (!info.Ok && info.Error.Length == 0) info.Error = "AXML 解析未得到包名";
+        }
+        catch (Exception ex) { info.Ok = false; info.Error = ex.Message; }
+        return info;
+    }
+
+    static void ReadFull(FileStream fs, long offset, byte[] buf, int count)
+    {
+        fs.Seek(offset, SeekOrigin.Begin);
+        int got = 0;
+        while (got < count) { int r = fs.Read(buf, got, count - got); if (r <= 0) throw new IOException("APK 读取意外结束"); got += r; }
+    }
+
+    // Locate an entry by name via the ZIP central directory, then read + inflate
+    // its local file data. Reads only the tail + central directory + the target
+    // entry by seeking, so it never loads the whole (multi-GB) APK into memory.
+    // Returns null if not found / unreadable. ZIP64 is not handled, which is
+    // fine here: the upload cap is 4 GiB, within the 32-bit offset range.
+    static byte[] ExtractZipEntry(FileStream fs, string entryName)
+    {
+        long fileLen = fs.Length;
+        if (fileLen < 22) return null;
+        // End Of Central Directory record (sig 0x06054b50) lives in the last
+        // 22 + up-to-64KiB (comment) bytes. Read that tail and scan backward.
+        int tailLen = (int)Math.Min(fileLen, 22 + 65535);
+        byte[] tail = new byte[tailLen];
+        ReadFull(fs, fileLen - tailLen, tail, tailLen);
+        int eocd = -1;
+        for (int i = tailLen - 22; i >= 0; i--)
+        {
+            if (tail[i] == 0x50 && tail[i + 1] == 0x4B && tail[i + 2] == 0x05 && tail[i + 3] == 0x06) { eocd = i; break; }
+        }
+        if (eocd < 0) return null;
+        int cdCount = LE16(tail, eocd + 10);
+        long cdSize = LE32(tail, eocd + 12);
+        long cdOffset = LE32(tail, eocd + 16);
+        if (cdOffset < 0 || cdSize <= 0 || cdOffset + cdSize > fileLen || cdSize > 64 * 1024 * 1024) return null;
+        byte[] cd = new byte[cdSize];
+        ReadFull(fs, cdOffset, cd, (int)cdSize);
+        int p = 0;
+        for (int n = 0; n < cdCount && p + 46 <= cd.Length; n++)
+        {
+            if (!(cd[p] == 0x50 && cd[p + 1] == 0x4B && cd[p + 2] == 0x01 && cd[p + 3] == 0x02)) break; // 0x02014b50
+            int method = LE16(cd, p + 10);
+            long compSize = LE32(cd, p + 20);
+            int nameLen = LE16(cd, p + 28);
+            int extraLen = LE16(cd, p + 30);
+            int commentLen = LE16(cd, p + 32);
+            long localOff = LE32(cd, p + 42);
+            string name = Encoding.UTF8.GetString(cd, p + 46, nameLen);
+            if (name == entryName)
+            {
+                if (compSize < 0 || compSize > 64 * 1024 * 1024) return null; // manifest is tiny
+                // Local file header (sig 0x04034b50): its own name/extra lengths
+                // are authoritative for locating the compressed data start.
+                byte[] lh = new byte[30];
+                ReadFull(fs, localOff, lh, 30);
+                if (!(lh[0] == 0x50 && lh[1] == 0x4B && lh[2] == 0x03 && lh[3] == 0x04)) return null;
+                int lNameLen = LE16(lh, 26);
+                int lExtraLen = LE16(lh, 28);
+                long dataStart = localOff + 30 + lNameLen + lExtraLen;
+                if (dataStart < 0 || dataStart + compSize > fileLen) return null;
+                byte[] comp = new byte[compSize];
+                ReadFull(fs, dataStart, comp, (int)compSize);
+                if (method == 0) return comp; // stored
+                if (method == 8) // deflate (raw, no zlib header)
+                {
+                    using (MemoryStream ms = new MemoryStream(comp))
+                    using (DeflateStream ds = new DeflateStream(ms, CompressionMode.Decompress))
+                    using (MemoryStream outMs = new MemoryStream())
+                    {
+                        byte[] buf = new byte[8192]; int r;
+                        while ((r = ds.Read(buf, 0, buf.Length)) > 0) outMs.Write(buf, 0, r);
+                        return outMs.ToArray();
+                    }
+                }
+                return null;
+            }
+            p += 46 + nameLen + extraLen + commentLen;
+        }
+        return null;
+    }
+
+    // Minimal AXML walker. Layout: file header, string-pool chunk (0x0001),
+    // optional resource-map (0x0180), then XML node chunks. We only need the
+    // <manifest> attributes and every <uses-permission android:name>.
+    static void ParseAxml(byte[] b, ApkInfo info)
+    {
+        if (b.Length < 8 || !(b[0] == 0x03 && b[1] == 0x00 && b[2] == 0x08 && b[3] == 0x00)) { info.Error = "不是有效的 AXML 头"; return; }
+        string[] strings = null;
+        int pos = 8; // after file header (magic + file size)
+        List<string> perms = new List<string>();
+        while (pos + 8 <= b.Length)
+        {
+            int chunkType = LE16(b, pos);
+            long chunkSize = LE32(b, pos + 4);
+            if (chunkSize < 8 || pos + chunkSize > b.Length) break;
+            if (chunkType == 0x0001) strings = ReadStringPool(b, pos);
+            else if (chunkType == 0x0102) // START_TAG (RES_XML_START_ELEMENT_TYPE)
+            {
+                // header(8) lineNo(4) comment(4) ns(4) name(4) attrStart(2)
+                // attrSize(2) attrCount(2) ...
+                int nameIdx = (int)LE32(b, pos + 20);
+                string tag = SafeStr(strings, nameIdx);
+                int attrCount = LE16(b, pos + 28);
+                int attrBase = pos + 36;
+                if (tag == "manifest") ReadManifestAttrs(b, attrBase, attrCount, strings, info);
+                else if (tag == "uses-permission")
+                {
+                    string nm = ReadAttrString(b, attrBase, attrCount, strings, "name");
+                    if (nm.Length > 0 && !perms.Contains(nm)) perms.Add(nm);
+                }
+            }
+            pos += (int)chunkSize;
+        }
+        info.Permissions = perms;
+    }
+
+    // Each attribute is 20 bytes: ns(4) name(4) rawValue(4) typedSize(2)
+    // res0(1) dataType(1) data(4). dataType 0x03 = string (use pool), else int.
+    static void ReadManifestAttrs(byte[] b, int attrBase, int attrCount, string[] strings, ApkInfo info)
+    {
+        for (int i = 0; i < attrCount; i++)
+        {
+            int a = attrBase + i * 20;
+            if (a + 20 > b.Length) break;
+            int nameIdx = (int)LE32(b, a + 4);
+            string an = SafeStr(strings, nameIdx);
+            int dataType = b[a + 15] & 0xFF; // typedValue.dataType at +15 (size 2, res0 1, dataType 1)
+            long data = LE32(b, a + 16);
+            int rawIdx = (int)LE32(b, a + 8);
+            if (an == "package") info.Package = dataType == 0x03 ? SafeStr(strings, rawIdx) : SafeStr(strings, (int)data);
+            else if (an == "versionName") info.VersionName = dataType == 0x03 ? SafeStr(strings, rawIdx) : SafeStr(strings, (int)data);
+            else if (an == "versionCode") info.VersionCode = data.ToString(CultureInfo.InvariantCulture);
+        }
+    }
+
+    static string ReadAttrString(byte[] b, int attrBase, int attrCount, string[] strings, string wantName)
+    {
+        for (int i = 0; i < attrCount; i++)
+        {
+            int a = attrBase + i * 20;
+            if (a + 20 > b.Length) break;
+            int nameIdx = (int)LE32(b, a + 4);
+            if (SafeStr(strings, nameIdx) != wantName) continue;
+            int dataType = b[a + 15] & 0xFF; // typedValue.dataType at +15
+            int rawIdx = (int)LE32(b, a + 8);
+            long data = LE32(b, a + 16);
+            return dataType == 0x03 ? SafeStr(strings, rawIdx) : SafeStr(strings, (int)data);
+        }
+        return "";
+    }
+
+    static string SafeStr(string[] pool, int idx)
+    {
+        if (pool == null || idx < 0 || idx >= pool.Length) return "";
+        return pool[idx] ?? "";
+    }
+
+    // String pool chunk: header(8) stringCount(4) styleCount(4) flags(4)
+    // stringsStart(4) stylesStart(4) then stringCount u32 offsets. flags bit
+    // 0x100 => UTF-8 pool, else UTF-16.
+    static string[] ReadStringPool(byte[] b, int chunkPos)
+    {
+        int stringCount = (int)LE32(b, chunkPos + 8);
+        long flags = LE32(b, chunkPos + 16);
+        long stringsStart = LE32(b, chunkPos + 20);
+        bool utf8 = (flags & 0x100) != 0;
+        string[] result = new string[stringCount];
+        int offsetsBase = chunkPos + 28;
+        int dataBase = chunkPos + (int)stringsStart;
+        for (int i = 0; i < stringCount; i++)
+        {
+            long so = LE32(b, offsetsBase + i * 4);
+            int sp = dataBase + (int)so;
+            if (sp < 0 || sp >= b.Length) { result[i] = ""; continue; }
+            try { result[i] = utf8 ? ReadUtf8Str(b, sp) : ReadUtf16Str(b, sp); }
+            catch { result[i] = ""; }
+        }
+        return result;
+    }
+
+    // UTF-8 pool string: two length fields (char count, then byte count), each
+    // 1-2 bytes with high-bit-of-first-byte continuation; then byte-count bytes.
+    static string ReadUtf8Str(byte[] b, int p)
+    {
+        int q = p;
+        // char-count (skip, we use byte count)
+        if ((b[q] & 0x80) != 0) q += 2; else q += 1;
+        int byteLen = b[q] & 0xFF;
+        if ((byteLen & 0x80) != 0) { byteLen = ((byteLen & 0x7F) << 8) | (b[q + 1] & 0xFF); q += 2; } else { q += 1; }
+        return Encoding.UTF8.GetString(b, q, byteLen);
+    }
+
+    // UTF-16 pool string: length in u16 units (1-2 u16 with high-bit
+    // continuation for >0x7FFF), then that many UTF-16LE code units.
+    static string ReadUtf16Str(byte[] b, int p)
+    {
+        int q = p;
+        int len = LE16(b, q); q += 2;
+        if ((len & 0x8000) != 0) { len = ((len & 0x7FFF) << 16) | LE16(b, q); q += 2; }
+        return Encoding.Unicode.GetString(b, q, len * 2);
+    }
+
+    // --- APK install (WebUI-only, state-changing, confirm=YES gated) ---
+    //
+    // Design note: install/uninstall are hard-blocked in BOTH MCP servers by
+    // design (agents must not silently mutate the device). This install path
+    // lives only in the WebUI, which is the human-in-the-loop surface: the
+    // browser drops an APK, the server parses it locally, and nothing touches
+    // the headset until the user clicks confirm (confirm=YES).
+
+    static readonly object UploadLock = new object();
+    // serial-less staging: the browser uploads once, then may install with
+    // per-attempt options. Keyed by the server-generated upload id.
+    static Dictionary<string, string> UploadPaths = new Dictionary<string, string>();
+
+    // Keep only the newest `keep` staged upload folders; delete older ones.
+    // Best-effort: a folder currently being written by another request may
+    // survive a round, which is fine — it will be pruned on a later upload.
+    static void PruneUploads(int keep)
+    {
+        try
+        {
+            string root = Path.Combine(LogDir, "uploads");
+            if (!Directory.Exists(root)) return;
+            List<string> dirs = new List<string>(Directory.GetDirectories(root));
+            // Folder names are sortable timestamps (yyyyMMdd_HHmmss_fff), so a
+            // plain ordinal sort is newest-last.
+            dirs.Sort(StringComparer.Ordinal);
+            for (int i = 0; i < dirs.Count - keep; i++)
+            {
+                try { Directory.Delete(dirs[i], true); } catch { }
+            }
+        }
+        catch { }
+    }
+
+    const long MaxApkBytes = 4L * 1024 * 1024 * 1024; // 4 GiB hard cap
+
+    static Dictionary<string, string> ApkUpload(Stream stream, string query, long contentLength)
+    {
+        Dictionary<string, string> d = Ok();
+        try
+        {
+            if (contentLength <= 0) { DrainBody(stream, contentLength); throw new Exception("上传内容为空或缺少 Content-Length。"); }
+            if (contentLength > MaxApkBytes) { DrainBody(stream, contentLength); throw new Exception("APK 超过大小上限（4 GiB）。"); }
+
+            // The client filename is advisory only (for display). The on-disk
+            // path is entirely server-generated; the client never controls it.
+            string clientName = Query(query, "name");
+            string display = SanitizeDisplayName(clientName);
+
+            string id = DateTime.Now.ToString("yyyyMMdd_HHmmss_fff");
+            string dir = Path.Combine(LogDir, "uploads", id);
+            Directory.CreateDirectory(dir);
+            // Staged APKs can be very large (a single Quest app is often
+            // hundreds of MB). Prune old upload folders before writing a new
+            // one so repeated installs cannot silently fill the disk.
+            PruneUploads(3);
+            string apkPath = Path.Combine(dir, "app.apk");
+
+            long written = StreamBodyToFile(stream, contentLength, apkPath, MaxApkBytes);
+            if (written < 0) { try { File.Delete(apkPath); } catch { } throw new Exception("APK 超过大小上限（4 GiB）。"); }
+
+            // Magic check: a ZIP (and therefore an APK) starts with 'PK\x03\x04'
+            // (or the empty-archive 'PK\x05\x06'). Read just the first 4 bytes;
+            // the file itself may be multiple GB and must not be slurped.
+            byte[] magic = new byte[4];
+            using (FileStream mf = new FileStream(apkPath, FileMode.Open, FileAccess.Read))
+            {
+                int got = mf.Read(magic, 0, 4);
+                if (got < 4 || magic[0] != 0x50 || magic[1] != 0x4B ||
+                    !((magic[2] == 0x03 && magic[3] == 0x04) || (magic[2] == 0x05 && magic[3] == 0x06)))
+                {
+                    mf.Close();
+                    try { File.Delete(apkPath); Directory.Delete(dir, true); } catch { }
+                    throw new Exception("这不是有效的 APK（缺少 ZIP/PK 头）。");
+                }
+            }
+
+            ApkInfo info = ParseApk(apkPath);
+
+            lock (UploadLock) { UploadPaths[id] = apkPath; }
+
+            d["uploadId"] = id;
+            d["fileName"] = display;
+            d["sizeBytes"] = written.ToString(CultureInfo.InvariantCulture);
+            d["sizeText"] = HumanSize(written);
+            d["package"] = info.Package;
+            d["versionName"] = info.VersionName;
+            d["versionCode"] = info.VersionCode;
+            d["permissionCount"] = info.Permissions.Count.ToString(CultureInfo.InvariantCulture);
+            d["permissions"] = string.Join("\n", info.Permissions.ToArray());
+            d["parseOk"] = info.Ok ? "true" : "false";
+            if (!info.Ok) d["parseError"] = info.Error;
+
+            // If the package is already installed, surface the installed
+            // versionCode so the UI can recommend -r / warn about downgrade.
+            if (info.Ok && info.Package.Length > 0)
+            {
+                string serial = CurrentSerial();
+                if (serial != "-")
+                {
+                    string installed = InstalledVersionCode(serial, info.Package);
+                    d["installedVersionCode"] = installed;
+                    d["alreadyInstalled"] = installed.Length > 0 ? "true" : "false";
+                }
+            }
+            Log("APK 上传：" + display + " (" + HumanSize(written) + ") pkg=" + info.Package + " vName=" + info.VersionName + " vCode=" + info.VersionCode);
+        }
+        catch (Exception ex) { d["ok"] = "false"; d["error"] = ex.Message; Log("APK 上传失败：" + ex.Message); }
+        return d;
+    }
+
+    static Dictionary<string, string> ApkInstall(string query)
+    {
+        Dictionary<string, string> d = Ok();
+        try
+        {
+            string id = Query(query, "uploadId");
+            string apkPath;
+            lock (UploadLock) { if (!UploadPaths.TryGetValue(id, out apkPath)) apkPath = null; }
+            if (string.IsNullOrEmpty(apkPath) || !File.Exists(apkPath)) throw new Exception("找不到已上传的 APK，请重新上传。");
+
+            string serial = CurrentSerial();
+            if (serial == "-") throw new Exception("没有在线且已授权的 Quest。");
+
+            bool optReplace = Query(query, "replace") == "1";        // -r keep data
+            bool optGrant = Query(query, "grant") == "1";            // -g grant runtime perms
+            bool optDowngrade = Query(query, "downgrade") == "1";    // -d allow version downgrade
+            bool optUninstallFirst = Query(query, "uninstallFirst") == "1"; // uninstall on signature mismatch
+            string package = Query(query, "package"); // from the upload parse; may be ""
+
+            StringBuilder steps = new StringBuilder();
+            Log("APK 安装开始：serial=" + serial + " pkg=" + package + " r=" + optReplace + " g=" + optGrant + " d=" + optDowngrade + " uf=" + optUninstallFirst);
+
+            // Optional explicit uninstall-first (user asked, e.g. known signature change).
+            if (optUninstallFirst && SafePackage(package))
+            {
+                steps.AppendLine("卸载旧包 " + package + " ...");
+                CmdResult un = RunResult(AdbPath, new string[] { "-s", serial, "uninstall", package }, 60000);
+                steps.AppendLine("  " + FirstLine(un.Text));
+            }
+
+            List<string> args = new List<string>();
+            args.Add("-s"); args.Add(serial); args.Add("install");
+            if (optReplace) args.Add("-r");
+            if (optGrant) args.Add("-g");
+            if (optDowngrade) args.Add("-d");
+            args.Add(apkPath);
+
+            steps.AppendLine("安装：adb " + JoinArgs(args.ToArray()));
+            CmdResult res = RunResult(AdbPath, args.ToArray(), 300000);
+            string outText = Clean(res.Text);
+            steps.AppendLine("  " + FirstMeaningfulLine(outText));
+
+            bool success = !res.TimedOut && res.ExitCode == 0 && outText.IndexOf("Success", StringComparison.OrdinalIgnoreCase) >= 0;
+
+            // Smart retry: signature mismatch / incompatible update. If the user
+            // did NOT already ask to uninstall-first, retry once with an
+            // explicit uninstall (only when we know the package name).
+            if (!success && !optUninstallFirst && SafePackage(package) &&
+                (outText.IndexOf("INSTALL_FAILED_UPDATE_INCOMPATIBLE", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                 outText.IndexOf("signatures do not match", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                 outText.IndexOf("INCONSISTENT_CERTIFICATES", StringComparison.OrdinalIgnoreCase) >= 0))
+            {
+                steps.AppendLine("签名不符，自动卸载旧包后重装 " + package + " ...");
+                CmdResult un = RunResult(AdbPath, new string[] { "-s", serial, "uninstall", package }, 60000);
+                steps.AppendLine("  " + FirstLine(un.Text));
+                CmdResult res2 = RunResult(AdbPath, args.ToArray(), 300000);
+                outText = Clean(res2.Text);
+                steps.AppendLine("  重装：" + FirstMeaningfulLine(outText));
+                success = !res2.TimedOut && res2.ExitCode == 0 && outText.IndexOf("Success", StringComparison.OrdinalIgnoreCase) >= 0;
+                res = res2;
+            }
+
+            d["steps"] = steps.ToString();
+            d["raw"] = outText;
+            if (success)
+            {
+                d["result"] = "安装成功" + (package.Length > 0 ? "：" + package : "") + "。";
+                Log("APK 安装成功：" + package);
+            }
+            else
+            {
+                d["ok"] = "false";
+                string hint = TranslateInstallError(outText, res.TimedOut);
+                d["error"] = hint;
+                Log("APK 安装失败：" + hint + " raw=" + FirstMeaningfulLine(outText));
+            }
+        }
+        catch (Exception ex) { d["ok"] = "false"; d["error"] = ex.Message; Log("APK 安装异常：" + ex.Message); }
+        return d;
+    }
+
+    // --- SSE helpers: write Server-Sent Events straight to the raw socket ---
+
+    static void SseBegin(Stream s)
+    {
+        // No Content-Length: the body streams until we close the connection.
+        string head = "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream; charset=utf-8\r\nCache-Control: no-store\r\nConnection: close\r\nX-Accel-Buffering: no\r\n\r\n";
+        byte[] h = Encoding.ASCII.GetBytes(head);
+        s.Write(h, 0, h.Length); s.Flush();
+    }
+
+    static void SseSend(Stream s, string ev, Dictionary<string, string> data)
+    {
+        // One SSE message: an `event:` line + a single `data:` line carrying a
+        // JSON object, terminated by a blank line. JSON is our existing escaper.
+        StringBuilder sb = new StringBuilder();
+        sb.Append("event: ").Append(ev).Append("\n");
+        sb.Append("data: ").Append(Json(data)).Append("\n\n");
+        byte[] b = Encoding.UTF8.GetBytes(sb.ToString());
+        s.Write(b, 0, b.Length); s.Flush();
+    }
+
+    static void SseStage(Stream s, string stage, string text, int percent)
+    {
+        Dictionary<string, string> d = new Dictionary<string, string>();
+        d["stage"] = stage; d["text"] = text; d["percent"] = percent.ToString(CultureInfo.InvariantCulture);
+        SseSend(s, "stage", d);
+    }
+
+    static void SseOut(Stream s, string line)
+    {
+        Dictionary<string, string> d = new Dictionary<string, string>();
+        d["line"] = line;
+        SseSend(s, "output", d);
+    }
+
+    // Streamed install. Emits stage/output/done SSE events. adb install has no
+    // true byte-percentage, so progress is stage-weighted with a live elapsed
+    // timer on the client; the percentages here are honest phase checkpoints.
+    static void ApkInstallStream(Stream s, string query)
+    {
+        SseBegin(s);
+        try
+        {
+            string id = Query(query, "uploadId");
+            string apkPath;
+            lock (UploadLock) { if (!UploadPaths.TryGetValue(id, out apkPath)) apkPath = null; }
+            if (string.IsNullOrEmpty(apkPath) || !File.Exists(apkPath)) { SseDone(s, false, "找不到已上传的 APK，请重新上传。", ""); return; }
+
+            string serial = CurrentSerial();
+            if (serial == "-") { SseDone(s, false, "没有在线且已授权的 Quest。", ""); return; }
+
+            bool optReplace = Query(query, "replace") == "1";
+            bool optGrant = Query(query, "grant") == "1";
+            bool optDowngrade = Query(query, "downgrade") == "1";
+            bool optUninstallFirst = Query(query, "uninstallFirst") == "1";
+            string package = Query(query, "package");
+
+            Log("APK 流式安装开始：serial=" + serial + " pkg=" + package + " r=" + optReplace + " g=" + optGrant + " d=" + optDowngrade + " uf=" + optUninstallFirst);
+            SseStage(s, "prepare", "准备安装…", 5);
+
+            if (optUninstallFirst && SafePackage(package))
+            {
+                SseStage(s, "uninstall", "卸载旧包 " + package + "…", 12);
+                CmdResult un = RunStream(AdbPath, new string[] { "-s", serial, "uninstall", package }, 60000, delegate(string ln) { SseOut(s, ln); });
+                if (un.TimedOut) SseOut(s, "(卸载超时，继续尝试安装)");
+            }
+
+            List<string> args = new List<string>();
+            args.Add("-s"); args.Add(serial); args.Add("install");
+            if (optReplace) args.Add("-r");
+            if (optGrant) args.Add("-g");
+            if (optDowngrade) args.Add("-d");
+            args.Add(apkPath);
+
+            SseStage(s, "push", "推送 APK 到头显并安装…", 30);
+            SseOut(s, "adb " + JoinArgs(args.ToArray()));
+            bool sawSuccess = false;
+            bool sawSigMismatch = false;
+            string lastErrLine = "";
+            CmdResult res = RunStream(AdbPath, args.ToArray(), 600000, delegate(string ln)
+            {
+                SseOut(s, ln);
+                if (ln.IndexOf("Success", StringComparison.OrdinalIgnoreCase) >= 0) sawSuccess = true;
+                if (ln.IndexOf("INSTALL_FAILED_UPDATE_INCOMPATIBLE", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                    ln.IndexOf("signatures do not match", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                    ln.IndexOf("INCONSISTENT_CERTIFICATES", StringComparison.OrdinalIgnoreCase) >= 0) sawSigMismatch = true;
+                if (ln.IndexOf("Failure", StringComparison.OrdinalIgnoreCase) >= 0 || ln.IndexOf("Error", StringComparison.OrdinalIgnoreCase) >= 0) lastErrLine = ln.Trim();
+                if (ln.IndexOf("Streamed Install", StringComparison.OrdinalIgnoreCase) >= 0 || ln.IndexOf("Performing", StringComparison.OrdinalIgnoreCase) >= 0)
+                    SseStage(s, "install", "在设备上安装…", 70);
+            });
+            bool success = !res.TimedOut && res.ExitCode == 0 && sawSuccess;
+
+            if (success) { SseDone(s, true, "安装成功" + (package.Length > 0 ? "：" + package : "") + "。", package); Log("APK 流式安装成功：" + package); return; }
+
+            // Smart retry ONLY on a real signature mismatch (uninstall clears the
+            // app's data, so we never do it for unrelated failures like low
+            // storage). Requires knowing the package name.
+            if (sawSigMismatch && !optUninstallFirst && SafePackage(package))
+            {
+                SseStage(s, "retry", "签名不符，卸载旧包后重装…", 40);
+                RunStream(AdbPath, new string[] { "-s", serial, "uninstall", package }, 60000, delegate(string ln) { SseOut(s, ln); });
+                bool ok2 = false;
+                CmdResult res2 = RunStream(AdbPath, args.ToArray(), 600000, delegate(string ln)
+                {
+                    SseOut(s, ln);
+                    if (ln.IndexOf("Success", StringComparison.OrdinalIgnoreCase) >= 0) ok2 = true;
+                    if (ln.IndexOf("Failure", StringComparison.OrdinalIgnoreCase) >= 0 || ln.IndexOf("Error", StringComparison.OrdinalIgnoreCase) >= 0) lastErrLine = ln.Trim();
+                });
+                if (!res2.TimedOut && res2.ExitCode == 0 && ok2) { SseDone(s, true, "安装成功（已先卸载旧包）：" + package, package); Log("APK 流式安装成功(重装)：" + package); return; }
+            }
+
+            SseDone(s, false, TranslateInstallError(lastErrLine, res.TimedOut), package);
+        }
+        catch (Exception ex) { try { SseDone(s, false, "安装异常：" + ex.Message, ""); } catch { } Log("APK 流式安装异常：" + ex.Message); }
+    }
+
+    static void SseDone(Stream s, bool ok, string message, string package)
+    {
+        Dictionary<string, string> d = new Dictionary<string, string>();
+        d["ok"] = ok ? "true" : "false";
+        d["message"] = message;
+        d["package"] = package;
+        d["percent"] = ok ? "100" : "100";
+        SseSend(s, "done", d);
+    }
+
+    static string InstalledVersionCode(string serial, string package)
+    {
+        if (!SafePackage(package)) return "";
+        // `dumpsys package <pkg>` prints `versionCode=NNN ...` when installed.
+        string dump = Sh(serial, 4000, "dumpsys package " + package);
+        foreach (string raw in Lines(dump))
+        {
+            string l = raw.Trim();
+            int p = l.IndexOf("versionCode=", StringComparison.OrdinalIgnoreCase);
+            if (p >= 0)
+            {
+                string rest = l.Substring(p + "versionCode=".Length);
+                int sp = rest.IndexOf(' ');
+                string code = sp >= 0 ? rest.Substring(0, sp) : rest;
+                code = code.Trim();
+                if (code.Length > 0) return code;
+            }
+        }
+        return "";
+    }
+
+    static string TranslateInstallError(string outText, bool timedOut)
+    {
+        if (timedOut) return "安装超时（大包或设备无响应）。请确认头显已解锁并重试。";
+        string t = outText ?? "";
+        if (t.IndexOf("INSTALL_FAILED_UPDATE_INCOMPATIBLE", StringComparison.OrdinalIgnoreCase) >= 0 ||
+            t.IndexOf("signatures do not match", StringComparison.OrdinalIgnoreCase) >= 0 ||
+            t.IndexOf("INCONSISTENT_CERTIFICATES", StringComparison.OrdinalIgnoreCase) >= 0)
+            return "签名与已安装版本不一致：勾选“签名不符时先卸载”后重试（会清除该应用数据）。";
+        if (t.IndexOf("INSTALL_FAILED_VERSION_DOWNGRADE", StringComparison.OrdinalIgnoreCase) >= 0)
+            return "版本号低于已安装版本：勾选“允许降级 (-d)”后重试。";
+        if (t.IndexOf("INSTALL_FAILED_ALREADY_EXISTS", StringComparison.OrdinalIgnoreCase) >= 0)
+            return "应用已存在：勾选“重装保留数据 (-r)”后重试。";
+        if (t.IndexOf("INSTALL_FAILED_INSUFFICIENT_STORAGE", StringComparison.OrdinalIgnoreCase) >= 0)
+            return "设备存储空间不足。";
+        if (t.IndexOf("INSTALL_FAILED_NO_MATCHING_ABIS", StringComparison.OrdinalIgnoreCase) >= 0)
+            return "APK 的 CPU 架构 (ABI) 与设备不匹配。";
+        if (t.IndexOf("INSTALL_FAILED_OLDER_SDK", StringComparison.OrdinalIgnoreCase) >= 0)
+            return "APK 要求的系统版本高于设备当前版本。";
+        if (t.IndexOf("INSTALL_PARSE_FAILED", StringComparison.OrdinalIgnoreCase) >= 0)
+            return "APK 解析失败：文件可能损坏或不是有效安装包。";
+        string line = FirstMeaningfulLine(t);
+        return line.Length > 0 ? ("安装失败：" + line) : "安装失败（未知错误）。";
+    }
+
+    static bool SafePackage(string pkg)
+    {
+        if (string.IsNullOrEmpty(pkg)) return false;
+        if (pkg.Length > 128) return false;
+        foreach (char c in pkg) if (!(char.IsLetterOrDigit(c) || c == '.' || c == '_')) return false;
+        return true;
+    }
+
+    static string SanitizeDisplayName(string name)
+    {
+        if (string.IsNullOrEmpty(name)) return "app.apk";
+        StringBuilder sb = new StringBuilder();
+        foreach (char c in name)
+        {
+            if (char.IsLetterOrDigit(c) || c == '.' || c == '_' || c == '-' || c == ' ') sb.Append(c);
+        }
+        string s = sb.ToString().Trim();
+        if (s.Length == 0) return "app.apk";
+        if (s.Length > 80) s = s.Substring(0, 80);
+        return s;
+    }
+
+    static string HumanSize(long bytes)
+    {
+        if (bytes < 1024) return bytes + " B";
+        double kb = bytes / 1024.0;
+        if (kb < 1024) return kb.ToString("0.0", CultureInfo.InvariantCulture) + " KB";
+        double mb = kb / 1024.0;
+        if (mb < 1024) return mb.ToString("0.0", CultureInfo.InvariantCulture) + " MB";
+        double gb = mb / 1024.0;
+        return gb.ToString("0.00", CultureInfo.InvariantCulture) + " GB";
+    }
+
+    static string FirstMeaningfulLine(string text)
+    {
+        // adb install prints progress then a final Success/Failure line; prefer
+        // a line mentioning Success/Failure, else the first non-empty line.
+        string fallback = "";
+        foreach (string raw in Lines(text ?? ""))
+        {
+            string l = raw.Trim();
+            if (l.Length == 0) continue;
+            if (fallback.Length == 0) fallback = l;
+            if (l.IndexOf("Success", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                l.IndexOf("Failure", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                l.IndexOf("Error", StringComparison.OrdinalIgnoreCase) >= 0)
+                return Clean(l);
+        }
+        return Clean(fallback);
     }
 
     static void DebugMode(string serial)
@@ -920,6 +1694,45 @@ class QuestAdbWebUi
             return result;
         }
         catch (Exception ex) { result.Error = ex.Message; return result; }
+    }
+
+    // Line-streaming variant of RunResult: invokes onLine for each stdout/stderr
+    // line as it arrives (thread-safe via a lock), so callers can forward live
+    // progress. Returns exit code / timed-out in the CmdResult (Output/Error are
+    // left empty; the lines were delivered through the callback).
+    static CmdResult RunStream(string file, string[] args, int timeout, Action<string> onLine)
+    {
+        CmdResult result = new CmdResult();
+        object gate = new object();
+        try
+        {
+            ProcessStartInfo psi = new ProcessStartInfo();
+            psi.FileName = file;
+            psi.Arguments = JoinArgs(args);
+            psi.UseShellExecute = false;
+            psi.RedirectStandardOutput = true;
+            psi.RedirectStandardError = true;
+            psi.CreateNoWindow = true;
+            Process p = Process.Start(psi);
+            Thread outThread = new Thread(delegate()
+            {
+                try { string ln; while ((ln = p.StandardOutput.ReadLine()) != null) { if (onLine != null) lock (gate) { onLine(ln); } } }
+                catch { }
+            });
+            Thread errThread = new Thread(delegate()
+            {
+                try { string ln; while ((ln = p.StandardError.ReadLine()) != null) { if (onLine != null) lock (gate) { onLine(ln); } } }
+                catch { }
+            });
+            outThread.Start();
+            errThread.Start();
+            if (!p.WaitForExit(timeout)) { result.TimedOut = true; try { p.Kill(); } catch { } outThread.Join(500); errThread.Join(500); return result; }
+            result.ExitCode = p.ExitCode;
+            outThread.Join(2000);
+            errThread.Join(2000);
+            return result;
+        }
+        catch (Exception ex) { result.Error = ex.Message; if (onLine != null) { try { lock (gate) { onLine(ex.Message); } } catch { } } return result; }
     }
 
     static string JoinArgs(string[] args) { StringBuilder sb = new StringBuilder(); for (int i = 0; i < args.Length; i++) { if (i > 0) sb.Append(' '); sb.Append(QuoteArg(args[i])); } return sb.ToString(); }
