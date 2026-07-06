@@ -2,4 +2,4 @@ mcp>=1.9.0
 # Optional: downscales the inline screenshot returned to the agent so a single
 # capture cannot blow up the model's context window. capture_screenshot still
 # works without it (returns full-resolution image inline).
-Pillow>=10.0.0
+Pillow>=12.3.0
