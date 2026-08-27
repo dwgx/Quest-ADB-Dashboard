@@ -450,7 +450,7 @@ class QuestAdbWebUi
             }
             if (uri.AbsolutePath == "/api/apk/install-stream")
             {
-                if (!authed) { WriteJson(stream, Error(T("安装 APK 需要二次确认。", "APK install requires confirmation."))); return; }
+                if (!authed) { WriteJson(stream, Error(T("token 无效", "invalid token"))); return; }
                 if (Query(uri.Query, "confirm") != "YES") { WriteJson(stream, Error(T("安装 APK 需要二次确认。", "APK install requires confirmation."))); return; }
                 // Streamed install: Server-Sent Events over the raw socket.
                 // The install can take minutes for a large APK, so widen the
@@ -2580,6 +2580,7 @@ __HTML_BASE64_LINES__
             }
             if (op == "force-stop")
             {
+                if (!user) return Error(T("只能强行停止第三方应用。", "Only third-party apps can be force-stopped."));
                 MustA(5000, "-s", serial, "shell", "am", "force-stop", pkg);
                 return ActionOk(T("已强行停止 ", "Force-stopped ") + pkg, "");
             }
@@ -2614,6 +2615,7 @@ __HTML_BASE64_LINES__
             }
             if (op == "grant" || op == "revoke")
             {
+                if (!user) return Error(T("只能改第三方应用的权限。", "Only third-party app permissions can be changed."));
                 string perm = Query(query, "permission");
                 if (!SafeName(perm) || perm.IndexOf("permission.", StringComparison.OrdinalIgnoreCase) < 0)
                     return Error(T("权限名不合法。", "Invalid permission name."));
@@ -2667,7 +2669,10 @@ __HTML_BASE64_LINES__
     {
         string safe = SanitizeDisplayName(name);
         if (!safe.EndsWith(".apk", StringComparison.OrdinalIgnoreCase)) { WriteBytes(stream, "text/plain; charset=utf-8", Encoding.UTF8.GetBytes("bad name")); return; }
-        string path = Path.Combine(LogDir, "apk-extract", safe);
+        string dir = Path.GetFullPath(Path.Combine(LogDir, "apk-extract"));
+        if (!dir.EndsWith(Path.DirectorySeparatorChar.ToString())) dir += Path.DirectorySeparatorChar;
+        string path = Path.GetFullPath(Path.Combine(dir, safe));
+        if (!path.StartsWith(dir, StringComparison.OrdinalIgnoreCase)) { WriteBytes(stream, "text/plain; charset=utf-8", Encoding.UTF8.GetBytes("bad name")); return; }
         if (!File.Exists(path)) { WriteBytes(stream, "text/plain; charset=utf-8", Encoding.UTF8.GetBytes("missing")); return; }
         FileInfo fi = new FileInfo(path);
         string head = "HTTP/1.1 200 OK\r\nContent-Type: application/vnd.android.package-archive\r\nContent-Disposition: attachment; filename=\"" + safe.Replace("\"", "") + "\"\r\nContent-Length: " + fi.Length + "\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n";
@@ -2728,8 +2733,7 @@ __HTML_BASE64_LINES__
         {
             string zip = Path.Combine(Path.GetTempPath(), "quest-platform-tools-" + Guid.NewGuid().ToString("N") + ".zip");
             string destRoot = string.IsNullOrEmpty(RootDir) ? AppDomain.CurrentDomain.BaseDirectory : RootDir;
-            destRoot = destRoot.TrimEnd('\\', '/', '.');
-            if (destRoot.EndsWith(".")) destRoot = destRoot.TrimEnd('.');
+            destRoot = Path.GetFullPath(destRoot.TrimEnd('\\', '/'));
             string dest = Path.Combine(destRoot, "platform-tools");
             Log("ADB download start -> " + dest);
             try { ServicePointManager.SecurityProtocol = (SecurityProtocolType)3072; } catch { }
