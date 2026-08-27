@@ -6,9 +6,10 @@ The WebUI can generate two standalone HTML reports from a live authorized ADB de
 
 `share-safe` is intended for public troubleshooting. It redacts or removes:
 
-- Serial-like identifiers.
+- Serial-like identifiers, including `getprop` `[ro.serialno]: [VALUE]`.
 - MAC/BSSID values.
-- LAN IPs.
+- All IPv4 addresses (private, CGNAT, public), not only RFC1918.
+- IPv6 addresses (including compressed `::` forms).
 - SSID/BSSID lines.
 - Build fingerprints.
 - Session-like identifiers.

@@ -20,6 +20,7 @@ class QuestAdbWebUi
     static string LogFile = "";
     static readonly object LogLock = new object();
     static readonly Encoding Utf8NoBom = new UTF8Encoding(false);
+    [ThreadStatic] static string ReqLang;
 
     class CmdResult
     {
@@ -113,9 +114,60 @@ class QuestAdbWebUi
         string cameras = "{\\\"SensorType\\\":\\\"OG01A\\\"}{\\\"SensorType\\\":\\\"OV7251\\\"}{\\\"SensorType\\\":\\\"IMX471\\\"}";
         ExpectContains(failures, "CameraSummary", CameraSummary("", cameras), "OG01A 1", "OV7251 1", "IMX471 1");
 
+        SelfTestRedaction(failures);
+        SelfTestApkParse(failures);
+        SelfTestAppParsers(failures);
+
         if (failures.Count == 0) { Console.WriteLine("QuestAdbWebUi self-test PASS"); return 0; }
         foreach (string failure in failures) Console.Error.WriteLine(failure);
         return 1;
+    }
+
+    static void SelfTestRedaction(List<string> failures)
+    {
+        // Leak classes must match mcp/_redact_share_safe coverage: getprop
+        // serial form, all IPv4 (not RFC1918-only), IPv6 including :: forms.
+        Dictionary<string, string> secrets = new Dictionary<string, string>();
+        secrets["[ro.serialno]: [1PASH9BG0G0431]"] = "1PASH9BG0G0431";
+        secrets["inet 10.42.0.137/24"] = "10.42.0.137";
+        secrets["inet 192.168.1.5"] = "192.168.1.5";
+        secrets["public 8.8.8.8 dns"] = "8.8.8.8";
+        secrets["cgnat 100.64.3.9"] = "100.64.3.9";
+        secrets["inet6 fe80::1234:5678:9abc:def0 scope link"] = "fe80::1234";
+        secrets["addr 2001:db8::ff00:42:8329"] = "2001:db8";
+        foreach (KeyValuePair<string, string> kv in secrets)
+        {
+            string redacted = RedactLoose(kv.Key);
+            ExpectNotContains(failures, "redact:" + kv.Value, redacted, kv.Value);
+        }
+        string benign = "version 14 build PR1.0 model Quest_3";
+        Expect(failures, "redact-benign", benign, RedactLoose(benign));
+        ExpectNotContains(failures, "redact-time", RedactLoose("06-09 12:00:01.003 I ThermalService: skin=32.0C"), "REDACTED_IPV6");
+    }
+
+    static void SelfTestApkParse(List<string> failures)
+    {
+        byte[] axml = BuildMinimalAxml("com.example.questselftest", "1.2.3", 42, "android.permission.INTERNET");
+        ApkInfo parsed = new ApkInfo();
+        ParseAxml(axml, parsed);
+        Expect(failures, "axml.package", "com.example.questselftest", parsed.Package);
+        Expect(failures, "axml.versionName", "1.2.3", parsed.VersionName);
+        Expect(failures, "axml.versionCode", "42", parsed.VersionCode);
+        if (parsed.Permissions.Count != 1 || parsed.Permissions[0] != "android.permission.INTERNET")
+            failures.Add("axml.permission: expected [android.permission.INTERNET] but got [" + string.Join(",", parsed.Permissions.ToArray()) + "]");
+
+        string tmp = Path.Combine(Path.GetTempPath(), "quest-adb-selftest-" + Guid.NewGuid().ToString("N") + ".apk");
+        try
+        {
+            File.WriteAllBytes(tmp, StoredZip("AndroidManifest.xml", axml));
+            ApkInfo fromZip = ParseApk(tmp);
+            Expect(failures, "apk.ok", "True", fromZip.Ok.ToString());
+            Expect(failures, "apk.package", "com.example.questselftest", fromZip.Package);
+            Expect(failures, "apk.versionName", "1.2.3", fromZip.VersionName);
+            Expect(failures, "apk.versionCode", "42", fromZip.VersionCode);
+        }
+        catch (Exception ex) { failures.Add("apk.zip: " + ex.Message); }
+        finally { try { File.Delete(tmp); } catch { } }
     }
 
     static void Expect(List<string> failures, string name, string expected, string actual)
@@ -129,6 +181,169 @@ class QuestAdbWebUi
         {
             if ((actual ?? "").IndexOf(needle, StringComparison.OrdinalIgnoreCase) < 0) failures.Add(name + ": missing [" + needle + "] in [" + Clean(actual) + "]");
         }
+    }
+
+    static void ExpectNotContains(List<string> failures, string name, string actual, string secret)
+    {
+        if ((actual ?? "").IndexOf(secret, StringComparison.Ordinal) >= 0)
+            failures.Add(name + ": secret [" + secret + "] still present in [" + Clean(actual) + "]");
+    }
+
+    static void ZipU16(List<byte> b, int v) { b.Add((byte)(v & 255)); b.Add((byte)((v >> 8) & 255)); }
+    static void ZipU32(List<byte> b, int v) { ZipU16(b, v & 65535); ZipU16(b, (v >> 16) & 65535); }
+
+    static byte[] Utf8PoolString(string s)
+    {
+        byte[] raw = Encoding.UTF8.GetBytes(s);
+        List<byte> b = new List<byte>();
+        int chars = s.Length;
+        if (chars >= 128) { b.Add((byte)(0x80 | (chars >> 8))); b.Add((byte)(chars & 255)); }
+        else b.Add((byte)chars);
+        int n = raw.Length;
+        if (n >= 128) { b.Add((byte)(0x80 | (n >> 8))); b.Add((byte)(n & 255)); }
+        else b.Add((byte)n);
+        b.AddRange(raw);
+        b.Add(0);
+        return b.ToArray();
+    }
+
+    static byte[] BuildMinimalAxml(string package, string versionName, int versionCode, string permission)
+    {
+        string[] pool = new string[] { "manifest", "package", "versionName", "versionCode", "uses-permission", "name", package, versionName, permission };
+        List<byte[]> encoded = new List<byte[]>();
+        List<int> offsets = new List<int>();
+        int dataLen = 0;
+        for (int i = 0; i < pool.Length; i++)
+        {
+            offsets.Add(dataLen);
+            byte[] enc = Utf8PoolString(pool[i]);
+            encoded.Add(enc);
+            dataLen += enc.Length;
+        }
+        int stringsStart = 28 + pool.Length * 4;
+        int poolSize = stringsStart + dataLen;
+        while ((poolSize & 3) != 0) poolSize++;
+
+        List<byte> poolChunk = new List<byte>();
+        ZipU16(poolChunk, 0x0001);
+        ZipU16(poolChunk, 0x001C);
+        ZipU32(poolChunk, poolSize);
+        ZipU32(poolChunk, pool.Length);
+        ZipU32(poolChunk, 0);
+        ZipU32(poolChunk, 0x100);
+        ZipU32(poolChunk, stringsStart);
+        ZipU32(poolChunk, 0);
+        for (int i = 0; i < offsets.Count; i++) ZipU32(poolChunk, offsets[i]);
+        for (int i = 0; i < encoded.Count; i++) poolChunk.AddRange(encoded[i]);
+        while (poolChunk.Count < poolSize) poolChunk.Add(0);
+
+        List<byte> manifest = new List<byte>();
+        WriteStartTag(manifest, 0, 3);
+        WriteAttrString(manifest, 1, 6);
+        WriteAttrString(manifest, 2, 7);
+        WriteAttrInt(manifest, 3, versionCode);
+
+        List<byte> uses = new List<byte>();
+        WriteStartTag(uses, 4, 1);
+        WriteAttrString(uses, 5, 8);
+
+        int fileSize = 8 + poolChunk.Count + manifest.Count + uses.Count;
+        List<byte> file = new List<byte>();
+        ZipU16(file, 0x0003);
+        ZipU16(file, 0x0008);
+        ZipU32(file, fileSize);
+        file.AddRange(poolChunk);
+        file.AddRange(manifest);
+        file.AddRange(uses);
+        return file.ToArray();
+    }
+
+    static void WriteStartTag(List<byte> b, int nameIdx, int attrCount)
+    {
+        int chunkSize = 36 + 20 * attrCount;
+        ZipU16(b, 0x0102);
+        ZipU16(b, 0x0010);
+        ZipU32(b, chunkSize);
+        ZipU32(b, 1);
+        ZipU32(b, -1);
+        ZipU32(b, -1);
+        ZipU32(b, nameIdx);
+        ZipU16(b, 20);
+        ZipU16(b, 20);
+        ZipU16(b, attrCount);
+        ZipU16(b, 0);
+        ZipU16(b, 0);
+        ZipU16(b, 0);
+    }
+
+    static void WriteAttrString(List<byte> b, int nameIdx, int valueIdx)
+    {
+        ZipU32(b, -1);
+        ZipU32(b, nameIdx);
+        ZipU32(b, valueIdx);
+        ZipU16(b, 8);
+        b.Add(0);
+        b.Add(0x03);
+        ZipU32(b, valueIdx);
+    }
+
+    static void WriteAttrInt(List<byte> b, int nameIdx, int value)
+    {
+        ZipU32(b, -1);
+        ZipU32(b, nameIdx);
+        ZipU32(b, -1);
+        ZipU16(b, 8);
+        b.Add(0);
+        b.Add(0x10);
+        ZipU32(b, value);
+    }
+
+    static byte[] StoredZip(string entryName, byte[] data)
+    {
+        byte[] name = Encoding.UTF8.GetBytes(entryName);
+        List<byte> b = new List<byte>();
+        ZipU32(b, 0x04034b50);
+        ZipU16(b, 20);
+        ZipU16(b, 0);
+        ZipU16(b, 0);
+        ZipU16(b, 0);
+        ZipU16(b, 0);
+        ZipU32(b, 0);
+        ZipU32(b, data.Length);
+        ZipU32(b, data.Length);
+        ZipU16(b, name.Length);
+        ZipU16(b, 0);
+        b.AddRange(name);
+        b.AddRange(data);
+        int cdOffset = b.Count;
+        ZipU32(b, 0x02014b50);
+        ZipU16(b, 20);
+        ZipU16(b, 20);
+        ZipU16(b, 0);
+        ZipU16(b, 0);
+        ZipU16(b, 0);
+        ZipU16(b, 0);
+        ZipU32(b, 0);
+        ZipU32(b, data.Length);
+        ZipU32(b, data.Length);
+        ZipU16(b, name.Length);
+        ZipU16(b, 0);
+        ZipU16(b, 0);
+        ZipU16(b, 0);
+        ZipU16(b, 0);
+        ZipU32(b, 0);
+        ZipU32(b, 0);
+        b.AddRange(name);
+        int cdSize = b.Count - cdOffset;
+        ZipU32(b, 0x06054b50);
+        ZipU16(b, 0);
+        ZipU16(b, 0);
+        ZipU16(b, 1);
+        ZipU16(b, 1);
+        ZipU32(b, cdSize);
+        ZipU32(b, cdOffset);
+        ZipU16(b, 0);
+        return b.ToArray();
     }
 
     static void Serve(TcpClient client)
@@ -159,6 +374,7 @@ class QuestAdbWebUi
 
             long contentLength = 0;
             string headerToken = "";
+            string headerLang = "";
             for (int i = 1; i < headLines.Length; i++)
             {
                 string hl = headLines[i];
@@ -169,9 +385,13 @@ class QuestAdbWebUi
                 string hval = hl.Substring(colon + 1).Trim();
                 if (hname == "content-length") { long.TryParse(hval, out contentLength); }
                 else if (hname == "x-quest-token") { headerToken = hval; }
+                else if (hname == "x-quest-lang") { headerLang = hval; }
             }
+            ReqLang = NormalizeLang(headerLang);
 
             Uri uri = new Uri("http://127.0.0.1:" + Port + target);
+            string qLang = Query(uri.Query, "lang");
+            if (qLang.Length > 0) ReqLang = NormalizeLang(qLang);
             // API auth accepts the token via the X-Quest-Token header (used by
             // the SPA's fetch calls) OR the ?token= query param (kept so that
             // report links opened in a new browser tab still authenticate,
@@ -230,13 +450,58 @@ class QuestAdbWebUi
             }
             if (uri.AbsolutePath == "/api/apk/install-stream")
             {
-                if (!authed) { WriteJson(stream, Error("token 无效")); return; }
-                if (Query(uri.Query, "confirm") != "YES") { WriteJson(stream, Error("安装 APK 需要二次确认。")); return; }
+                if (!authed) { WriteJson(stream, Error(T("安装 APK 需要二次确认。", "APK install requires confirmation."))); return; }
+                if (Query(uri.Query, "confirm") != "YES") { WriteJson(stream, Error(T("安装 APK 需要二次确认。", "APK install requires confirmation."))); return; }
                 // Streamed install: Server-Sent Events over the raw socket.
                 // The install can take minutes for a large APK, so widen the
                 // send timeout for this connection.
                 try { client.SendTimeout = 600000; } catch { }
                 ApkInstallStream(stream, uri.Query);
+                return;
+            }
+            if (uri.AbsolutePath == "/api/apps")
+            {
+                if (!authed) { WriteJson(stream, Error(T("token 无效", "invalid token"))); return; }
+                WriteJson(stream, AppsList(Query(uri.Query, "scope")));
+                return;
+            }
+            if (uri.AbsolutePath == "/api/apps/detail")
+            {
+                if (!authed) { WriteJson(stream, Error(T("token 无效", "invalid token"))); return; }
+                WriteJson(stream, AppDetail(Query(uri.Query, "package")));
+                return;
+            }
+            if (uri.AbsolutePath == "/api/apps/action")
+            {
+                if (!authed) { WriteJson(stream, Error(T("token 无效", "invalid token"))); return; }
+                if (method != "POST") { WriteJson(stream, Error(T("修改操作必须使用 POST 请求。", "Mutating actions require POST."))); return; }
+                string appAct = Query(uri.Query, "op");
+                if (AppOpNeedsConfirm(appAct) && Query(uri.Query, "confirm") != "YES")
+                {
+                    WriteJson(stream, Error(T("危险操作需要二次确认。", "This action needs confirmation.")));
+                    return;
+                }
+                WriteJson(stream, AppAction(uri.Query));
+                return;
+            }
+            if (uri.AbsolutePath == "/api/apps/file")
+            {
+                if (Query(uri.Query, "token") != Token) { WriteBytes(stream, "text/plain; charset=utf-8", Encoding.UTF8.GetBytes(T("token 无效", "invalid token"))); return; }
+                ServeExtractedApk(stream, Query(uri.Query, "name"));
+                return;
+            }
+            if (uri.AbsolutePath == "/api/quest-settings")
+            {
+                if (!authed) { WriteJson(stream, Error(T("token 无效", "invalid token"))); return; }
+                WriteJson(stream, QuestSettings());
+                return;
+            }
+            if (uri.AbsolutePath == "/api/adb/download")
+            {
+                if (!authed) { WriteJson(stream, Error(T("token 无效", "invalid token"))); return; }
+                if (method != "POST") { WriteJson(stream, Error(T("下载必须使用 POST 请求。", "Download requires POST."))); return; }
+                if (Query(uri.Query, "confirm") != "YES") { WriteJson(stream, Error(T("下载 ADB 需要确认。", "ADB download needs confirmation."))); return; }
+                WriteJson(stream, AdbDownload());
                 return;
             }
             if (uri.AbsolutePath.StartsWith("/exports/", StringComparison.OrdinalIgnoreCase))
@@ -326,6 +591,8 @@ class QuestAdbWebUi
         d["service"] = "127.0.0.1:" + Port;
         d["adbPath"] = AdbPath;
         d["logFile"] = LogFile;
+        d["windowsLang"] = DetectLang();
+        d["adbFound"] = File.Exists(AdbPath) ? "true" : "false";
 
         string deviceLine, hint;
         string state = SelectDevice(out deviceLine, out hint);
@@ -353,6 +620,8 @@ class QuestAdbWebUi
         d["vendorPatch"] = Prop(serial, "ro.vendor.build.security_patch");
         d["abi"] = Prop(serial, "ro.product.cpu.abi");
         d["wifiIp"] = WifiIp(serial);
+        d["questLocale"] = Prop(serial, "persist.sys.locale");
+        if (d["questLocale"] == "-") d["questLocale"] = Setting(serial, "system", "system_locales");
         d["adbEnabled"] = Setting(serial, "global", "adb_enabled");
         d["adbWifi"] = Setting(serial, "global", "adb_wifi_enabled");
         d["stayOn"] = Setting(serial, "global", "stay_on_while_plugged_in");
@@ -404,11 +673,12 @@ class QuestAdbWebUi
                 else if (action == "reset_stay_on") { MustSh(serial, 3500, "settings put global stay_on_while_plugged_in 0"); d["result"] = "已重置 stay_on_while_plugged_in = 0。"; }
                 else if (action == "reset_wifi_sleep") { MustSh(serial, 3500, "settings put global wifi_sleep_policy 1"); d["result"] = "已重置 wifi_sleep_policy = 1。"; }
                 else if (action == "reset_sleep_timeout") { MustSh(serial, 3500, "settings delete secure sleep_timeout"); MustSh(serial, 3500, "am broadcast -a com.oculus.vrpowermanager.prox_open"); d["result"] = "已删除 sleep_timeout 并发送 prox_open。"; }
-                else if (action == "custom_setting")
+                else if (action == "quest_put" || action == "custom_setting")
                 {
                     string ns = Query(query, "ns"), key = Query(query, "key"), val = Query(query, "value");
-                    if (!ValidNs(ns) || !SafeName(key)) throw new Exception("namespace 或键名不合法。");
-                    if (DeniedSetting(key)) throw new Exception("该键名属于高风险系统键，已阻止自定义写入。");
+                    if (!ValidNs(ns) || !SafeName(key)) throw new Exception(T("namespace 或键名不合法。", "Invalid namespace or key."));
+                    if (DeniedSetting(key)) throw new Exception(T("该键名属于高风险系统键，已阻止自定义写入。", "That key is blocked as high-risk."));
+                    if (action == "quest_put" && !CatalogSetting(ns, key)) throw new Exception(T("该设置不在头显面板允许列表中。", "That setting is not in the headset catalog."));
                     EnsureBackup(serial);
                     MustSh(serial, 3500, "settings put " + ns + " " + key + " " + ShellQuote(val));
                     d["result"] = ns + "." + key + " = " + val;
@@ -1608,7 +1878,7 @@ class QuestAdbWebUi
         sb.AppendLine("<header class=\"doc-head\"><div><div class=\"kicker\">Quest ADB Tools / Read-only export</div><h1>Quest ADB 设备审计报告</h1><p class=\"sub\">基于公开 ADB 只读命令生成，用于整理 Quest 头显身份、系统、健康、工厂/校准线索、包与能力。导出流程不写入设置，不修改设备。作者测试设备版本：Quest 3。</p></div>");
         sb.AppendLine("<aside class=\"meta\"><div class=\"meta-row\"><span>报告编号</span><b>" + H(reportNo) + "</b></div><div class=\"meta-row\"><span>生成时间</span><b>" + H(V(f, "created")) + "</b></div><div class=\"meta-row\"><span>隐私级别</span><b><i class=\"stamp\">" + H(privacy) + "</i></b></div><div class=\"meta-row\"><span>ADB 来源</span><b title=\"" + H(V(f, "adbPath")) + "\">" + H(AdbSourceLabel(V(f, "adbPath"))) + "</b></div></aside></header>");
         sb.AppendLine("<section class=\"party-grid\"><div class=\"box\"><h2>设备</h2><div class=\"box-body\"><div class=\"big\">" + H(V(f, "model")) + "</div><div class=\"muted\">" + H(V(f, "manufacturer")) + " / " + H(V(f, "product")) + " / " + H(V(f, "device")) + "</div><div class=\"chips\"><span class=\"chip\">Serial " + H(serial) + "</span><span class=\"chip\">" + H(V(f, "android")) + " / SDK " + H(V(f, "sdk")) + "</span><span class=\"chip\">" + H(V(f, "soc")) + "</span></div></div></div>");
-        sb.AppendLine("<div class=\"box\"><h2>采集策略</h2><div class=\"box-body\"><div class=\"big\">" + H(safe ? "分享安全版" : "私有完整版") + "</div><div class=\"muted\">" + H(safe ? "已遮蔽序列号、局域网地址、MAC/BSSID、fingerprint、session 等敏感字段；跳过 logcat 附录。" : "保留完整私有证据，适合本机留档；不要直接公开分享。") + "</div><div class=\"chips\"><span class=\"chip\">No ADB write</span><span class=\"chip\">HTML/PDF ready</span><span class=\"chip\">Quest 3 noted</span></div></div></div></section>");
+        sb.AppendLine("<div class=\"box\"><h2>采集策略</h2><div class=\"box-body\"><div class=\"big\">" + H(safe ? "分享安全版" : "私有完整版") + "</div><div class=\"muted\">" + H(safe ? "已遮蔽序列号、全部 IPv4/IPv6、MAC/BSSID、fingerprint、session 等敏感字段；跳过 logcat 附录。" : "保留完整私有证据，适合本机留档；不要直接公开分享。") + "</div><div class=\"chips\"><span class=\"chip\">No ADB write</span><span class=\"chip\">HTML/PDF ready</span><span class=\"chip\">Quest 3 noted</span></div></div></div></section>");
         sb.AppendLine("<section class=\"summary\"><div class=\"sum-cell\"><span>电量 / 温度</span><b>" + H(V(f, "batteryLevel")) + " / " + H(V(f, "batteryTemp")) + "</b></div><div class=\"sum-cell\"><span>显示</span><b>" + H(V(f, "display")) + "</b></div><div class=\"sum-cell\"><span>存储</span><b>" + H(V(f, "storage")) + "</b></div><div class=\"sum-cell\"><span>校准</span><b>" + H(V(f, "factory")) + "</b></div></section>");
         AddInvoiceFacts(sb, "设备身份", f, safe, new string[] { "serial|序列号|adb devices / getprop", "deviceLine|ADB 设备行|adb devices -l", "manufacturer|厂商|ro.product.manufacturer", "brand|品牌|ro.product.brand", "model|型号|ro.product.model", "product|产品代号|ro.product.name", "device|设备代号|ro.product.device", "board|板级|ro.product.board", "soc|SoC|ro.soc.model", "abi|ABI|ro.product.cpu.abi" });
         AddInvoiceFacts(sb, "系统与构建", f, safe, new string[] { "android|Android|getprop", "sdk|SDK|getprop", "securityPatch|系统安全补丁|getprop", "vendorPatch|Vendor 安全补丁|getprop", "buildId|Build ID|getprop", "buildIncremental|Incremental|getprop", "buildBranch|Branch|getprop", "fingerprint|Fingerprint|getprop", "kernel|Kernel|uname -a" });
@@ -1929,7 +2199,7 @@ class QuestAdbWebUi
     static string RedactLoose(string text)
     {
         string s = Redact(text, null);
-        s = Regex.Replace(s, @"\b[A-Z0-9]{12,20}\b", delegate(Match m)
+        s = Regex.Replace(s, @"\b[A-Z0-9]{8,20}\b", delegate(Match m)
         {
             string v = m.Value;
             if (Regex.IsMatch(v, @"[A-Z]") && Regex.IsMatch(v, @"[0-9]")) return SerialMask(v);
@@ -1939,18 +2209,22 @@ class QuestAdbWebUi
     }
     static string Redact(string text, Snapshot snap)
     {
-        string s = Clean(text);
+        string s = text ?? "";
         if (snap != null && !string.IsNullOrEmpty(snap.Serial) && snap.Serial != "-") s = s.Replace(snap.Serial, SerialMask(snap.Serial));
         s = Regex.Replace(s, @"\b([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}\b", "**:**:**:**:**:**");
-        s = Regex.Replace(s, @"\b192\.168\.\d{1,3}\.\d{1,3}\b", "192.168.x.x");
-        s = Regex.Replace(s, @"\b10\.\d{1,3}\.\d{1,3}\.\d{1,3}\b", "10.x.x.x");
-        s = Regex.Replace(s, @"\b172\.(1[6-9]|2[0-9]|3[0-1])\.\d{1,3}\.\d{1,3}\b", "172.x.x.x");
+        // IPv6 before IPv4. Compressed forms must contain `::`. A digit
+        // followed by `:MM:SS` is a timestamp, not an address.
+        s = Regex.Replace(s, @"(?i)(?:[0-9a-f]{1,4}:)+:[0-9a-f][0-9a-f:]*", "[REDACTED_IPV6]");
+        s = Regex.Replace(s, @"(?i)(?<![0-9a-f:])::[0-9a-f][0-9a-f:]*", "[REDACTED_IPV6]");
+        s = Regex.Replace(s, @"(?i)\b(?:[0-9a-f]{1,4}:){4,}[0-9a-f]{1,4}\b", "[REDACTED_IPV6]");
+        s = Regex.Replace(s, @"\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b", "x.x.x.x");
+        s = Regex.Replace(s, @"^\[(ro\.serialno|ro\.boot\.serialno|androidboot\.serialno|gsm\.[^\]]*imei[^\]]*|persist\.[^\]]*serial[^\]]*)\]\s*:\s*\[[^\]]*\]", "[$1]: [<redacted>]", RegexOptions.IgnoreCase | RegexOptions.Multiline);
         s = Regex.Replace(s, @"(SSID|BSSID|WifiSsid|mWifiInfo)[^,\n\r]*", "$1=<redacted>", RegexOptions.IgnoreCase);
         s = Regex.Replace(s, @"ro\.build\.fingerprint\]: \[[^\]\n\r]+", "ro.build.fingerprint]: [<redacted>", RegexOptions.IgnoreCase);
         s = Regex.Replace(s, @"fingerprint=[^,\n\r]+", "fingerprint=<redacted>", RegexOptions.IgnoreCase);
         s = Regex.Replace(s, @"os_fingerprint[^,\n\r\\}]+", "os_fingerprint=<redacted>", RegexOptions.IgnoreCase);
         s = Regex.Replace(s, @"session_id[^,\n\r\\}]+", "session_id=<redacted>", RegexOptions.IgnoreCase);
-        return s;
+        return s.Replace("\r", "").Trim().Length == 0 ? "-" : s.Replace("\r", "").Trim();
     }
     static string SerialMask(string serial)
     {
@@ -1960,12 +2234,13 @@ class QuestAdbWebUi
     static string Clean(string s) { if (s == null) return "-"; s = s.Replace("\r", "").Trim(); return s.Length == 0 ? "-" : s; }
     static string[] Lines(string s) { return (s ?? "").Replace("\r", "").Split('\n'); }
     static bool ValidNs(string ns) { return ns == "global" || ns == "system" || ns == "secure"; }
-    static bool SafeName(string name) { if (string.IsNullOrEmpty(name)) return false; foreach (char c in name) if (!(char.IsLetterOrDigit(c) || c == '_' || c == '.' || c == '-')) return false; return true; }
+    static bool SafeName(string name) { if (string.IsNullOrEmpty(name)) return false; foreach (char c in name) if (!(char.IsLetterOrDigit(c) || c == '_' || c == '.' || c == '-' || c == ':')) return false; return true; }
     static bool DangerousAction(string action)
     {
         return action == "debug_mode" || action == "keep_awake" || action == "wireless" || action == "wireless_off" ||
                action == "prox_close" || action == "screen_24h" || action == "stay_usb_ac" ||
-               action == "restore_backup" || action == "custom_setting" || action == "custom_broadcast";
+               action == "restore_backup" || action == "custom_setting" || action == "custom_broadcast" ||
+               action == "quest_put";
     }
     static bool DeniedSetting(string key)
     {
@@ -1991,6 +2266,500 @@ class QuestAdbWebUi
         string b64 =
 __HTML_BASE64_LINES__
         ;
-        return Encoding.UTF8.GetString(Convert.FromBase64String(b64)).Replace("[[TOKEN]]", Token);
+        return Encoding.UTF8.GetString(Convert.FromBase64String(b64)).Replace("[[TOKEN]]", Token).Replace("[[LANG]]", DetectLang());
+    }
+
+    static string DetectLang()
+    {
+        try
+        {
+            if (CultureInfo.CurrentUICulture.TwoLetterISOLanguageName.Equals("zh", StringComparison.OrdinalIgnoreCase)) return "zh";
+            if (CultureInfo.CurrentCulture.TwoLetterISOLanguageName.Equals("zh", StringComparison.OrdinalIgnoreCase)) return "zh";
+        }
+        catch { }
+        return "en";
+    }
+
+    static string NormalizeLang(string raw)
+    {
+        string s = (raw ?? "").Trim().ToLowerInvariant();
+        if (s.StartsWith("zh")) return "zh";
+        if (s.StartsWith("en")) return "en";
+        return DetectLang();
+    }
+
+    static string T(string zh, string en)
+    {
+        return (ReqLang ?? DetectLang()) == "zh" ? zh : en;
+    }
+
+    class PkgListItem
+    {
+        public string Package = "";
+        public string Path = "";
+        public string Installer = "";
+        public string Title = "";
+        public bool User = false;
+    }
+
+    class PkgDetail
+    {
+        public string Package = "";
+        public string VersionName = "";
+        public string VersionCode = "";
+        public string MinSdk = "";
+        public string TargetSdk = "";
+        public string Installer = "";
+        public string Uid = "";
+        public string Abi = "";
+        public string CodePath = "";
+        public string ApkPath = "";
+        public string DataDir = "";
+        public string FirstInstall = "";
+        public string LastUpdate = "";
+        public string Enabled = "";
+        public string Stopped = "";
+        public string Flags = "";
+        public string SizeText = "";
+        public List<string> Requested = new List<string>();
+        public List<string> Runtime = new List<string>();
+    }
+
+    static void SelfTestAppParsers(List<string> failures)
+    {
+        string list = "package:/data/app/x/base.apk=VirtualDesktop.Android  installer=com.oculus.ocms\npackage:/data/app/y/base.apk=org.telegram.messenger.web  installer=null\n";
+        List<PkgListItem> items = ParsePmList(list, true);
+        Expect(failures, "pmlist.count", "2", items.Count.ToString());
+        Expect(failures, "pmlist.0", "VirtualDesktop.Android", items[0].Package);
+        Expect(failures, "pmlist.0.installer", "com.oculus.ocms", items[0].Installer);
+        Expect(failures, "pmlist.1", "org.telegram.messenger.web", items[1].Package);
+        Expect(failures, "title.vd", "VirtualDesktop", PackageTitle("VirtualDesktop.Android"));
+
+        string dump = "Packages:\n  Package [VirtualDesktop.Android] (c36a3c6):\n    appId=10171\n    codePath=/data/app/VirtualDesktop.Android-x\n    primaryCpuAbi=arm64-v8a\n    versionCode=10703 minSdk=29 targetSdk=32\n    versionName=1.34.22.0\n    flags=[ HAS_CODE ALLOW_CLEAR_USER_DATA ]\n    dataDir=/data/user/0/VirtualDesktop.Android\n    lastUpdateTime=2026-08-26 08:22:07\n    installerPackageName=com.oculus.ocms\n    requested permissions:\n      android.permission.INTERNET\n      android.permission.RECORD_AUDIO\n    User 0: ceDataInode=1 installed=true hidden=false stopped=false enabled=0\n      firstInstallTime=2026-07-05 16:05:14\n      runtime permissions:\n        android.permission.RECORD_AUDIO: granted=true\n        android.permission.POST_NOTIFICATIONS: granted=false\n";
+        PkgDetail det = ParsePackageDump(dump, "VirtualDesktop.Android");
+        Expect(failures, "dump.ver", "1.34.22.0", det.VersionName);
+        Expect(failures, "dump.code", "10703", det.VersionCode);
+        Expect(failures, "dump.min", "29", det.MinSdk);
+        Expect(failures, "dump.target", "32", det.TargetSdk);
+        Expect(failures, "dump.installer", "com.oculus.ocms", det.Installer);
+        Expect(failures, "dump.abi", "arm64-v8a", det.Abi);
+        ExpectContains(failures, "dump.req", string.Join(",", det.Requested.ToArray()), "android.permission.INTERNET");
+        ExpectContains(failures, "dump.rt", string.Join(",", det.Runtime.ToArray()), "RECORD_AUDIO:true", "POST_NOTIFICATIONS:false");
+        Expect(failures, "dump.first", "2026-07-05 16:05:14", det.FirstInstall);
+    }
+
+    static string PackageTitle(string pkg)
+    {
+        if (string.IsNullOrEmpty(pkg)) return "-";
+        string[] parts = pkg.Split('.');
+        int i = parts.Length - 1;
+        while (i > 0)
+        {
+            string p = parts[i];
+            if (p.Equals("android", StringComparison.OrdinalIgnoreCase) || p.Equals("oculus", StringComparison.OrdinalIgnoreCase) || p.Length <= 2) { i--; continue; }
+            break;
+        }
+        string last = parts[i];
+        if (last.Length == 0) return pkg;
+        return char.ToUpperInvariant(last[0]) + last.Substring(1);
+    }
+
+    static List<PkgListItem> ParsePmList(string text, bool markUser)
+    {
+        List<PkgListItem> list = new List<PkgListItem>();
+        foreach (string raw in Lines(text))
+        {
+            string l = raw.Trim();
+            if (!l.StartsWith("package:", StringComparison.OrdinalIgnoreCase)) continue;
+            string rest = l.Substring(8);
+            string installer = "";
+            int inst = rest.IndexOf("  installer=", StringComparison.OrdinalIgnoreCase);
+            if (inst < 0) inst = rest.IndexOf(" installer=", StringComparison.OrdinalIgnoreCase);
+            if (inst >= 0)
+            {
+                int eq = rest.IndexOf('=', inst);
+                installer = eq >= 0 ? rest.Substring(eq + 1).Trim() : "";
+                rest = rest.Substring(0, inst).Trim();
+            }
+            int sep = rest.LastIndexOf('=');
+            if (sep <= 0) continue;
+            PkgListItem it = new PkgListItem();
+            it.Path = rest.Substring(0, sep).Trim();
+            it.Package = rest.Substring(sep + 1).Trim();
+            it.Installer = installer == "null" ? "" : installer;
+            it.Title = PackageTitle(it.Package);
+            it.User = markUser;
+            if (SafePackage(it.Package)) list.Add(it);
+        }
+        return list;
+    }
+
+    static PkgDetail ParsePackageDump(string text, string pkg)
+    {
+        PkgDetail d = new PkgDetail();
+        d.Package = pkg;
+        string marker = "Package [" + pkg + "]";
+        int start = (text ?? "").IndexOf(marker, StringComparison.OrdinalIgnoreCase);
+        string body = start >= 0 ? text.Substring(start) : (text ?? "");
+        d.VersionName = FirstRegex(body, @"versionName=([^\s]+)");
+        d.VersionCode = FirstRegex(body, @"versionCode=(\d+)");
+        d.MinSdk = FirstRegex(body, @"minSdk=(\d+)");
+        d.TargetSdk = FirstRegex(body, @"targetSdk=(\d+)");
+        d.Installer = FirstRegex(body, @"installerPackageName=([^\s]+)");
+        if (d.Installer == "null") d.Installer = "";
+        d.Uid = FirstRegex(body, @"appId=(\d+)");
+        d.Abi = FirstRegex(body, @"primaryCpuAbi=([^\s]+)");
+        d.CodePath = FirstRegex(body, @"codePath=([^\s]+)");
+        d.DataDir = FirstRegex(body, @"dataDir=([^\s]+)");
+        d.LastUpdate = FirstRegex(body, @"lastUpdateTime=([0-9]{4}-[0-9]{2}-[0-9]{2} [0-9:]{8})");
+        d.FirstInstall = FirstRegex(body, @"firstInstallTime=([0-9]{4}-[0-9]{2}-[0-9]{2} [0-9:]{8})");
+        d.Flags = FirstRegex(body, @"flags=\[([^\]]*)\]");
+        string enabled = FirstRegex(body, @"enabled=(\d+)");
+        d.Enabled = enabled == "0" || enabled == "-" ? "true" : "false";
+        d.Stopped = body.IndexOf("stopped=true", StringComparison.OrdinalIgnoreCase) >= 0 ? "true" : "false";
+        bool inReq = false, inRt = false;
+        foreach (string raw in Lines(body))
+        {
+            string t = raw.Trim();
+            if (t.StartsWith("requested permissions:", StringComparison.OrdinalIgnoreCase)) { inReq = true; inRt = false; continue; }
+            if (t.StartsWith("install permissions:", StringComparison.OrdinalIgnoreCase) || t.StartsWith("declared permissions:", StringComparison.OrdinalIgnoreCase) || t.StartsWith("User ", StringComparison.Ordinal)) { if (!t.StartsWith("User ", StringComparison.Ordinal)) inReq = false; }
+            if (t.StartsWith("runtime permissions:", StringComparison.OrdinalIgnoreCase)) { inRt = true; inReq = false; continue; }
+            if (t.StartsWith("Queries:", StringComparison.OrdinalIgnoreCase) || t.StartsWith("Dexopt", StringComparison.OrdinalIgnoreCase)) { inReq = false; inRt = false; }
+            if (inReq && t.IndexOf("permission.", StringComparison.OrdinalIgnoreCase) >= 0 && t.IndexOf(':') < 0)
+            {
+                if (!d.Requested.Contains(t)) d.Requested.Add(t);
+            }
+            if (inRt && t.IndexOf("permission.", StringComparison.OrdinalIgnoreCase) >= 0 && t.IndexOf("granted=", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                string name = t;
+                int c = t.IndexOf(':');
+                if (c > 0) name = t.Substring(0, c).Trim();
+                bool granted = t.IndexOf("granted=true", StringComparison.OrdinalIgnoreCase) >= 0;
+                string row = name + ":" + (granted ? "true" : "false");
+                if (!d.Runtime.Contains(row)) d.Runtime.Add(row);
+            }
+        }
+        return d;
+    }
+
+    static bool AppOpNeedsConfirm(string op)
+    {
+        return op == "uninstall" || op == "clear" || op == "disable" || op == "enable" || op == "force-stop" || op == "grant" || op == "revoke";
+    }
+
+    static Dictionary<string, string> AppsList(string scope)
+    {
+        Dictionary<string, string> d = Ok();
+        string serial = CurrentSerial();
+        if (serial == "-") return Error(T("没有在线且已授权的 Quest。", "No authorized Quest online."));
+        string sc = (scope ?? "user").ToLowerInvariant();
+        if (sc != "user" && sc != "system" && sc != "all") sc = "user";
+        string args = sc == "system" ? "pm list packages -f -i -s" : (sc == "all" ? "pm list packages -f -i" : "pm list packages -f -i -3");
+        string raw = Sh(serial, 12000, args);
+        bool user = sc != "system";
+        List<PkgListItem> items = ParsePmList(raw, sc == "user" || sc == "all");
+        if (sc == "system") foreach (PkgListItem it in items) it.User = false;
+        if (sc == "all")
+        {
+            List<PkgListItem> third = ParsePmList(Sh(serial, 8000, "pm list packages -3"), true);
+            Dictionary<string, bool> userSet = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
+            foreach (PkgListItem u in third) userSet[u.Package] = true;
+            foreach (PkgListItem it in items) it.User = userSet.ContainsKey(it.Package);
+        }
+        StringBuilder sb = new StringBuilder("[");
+        for (int i = 0; i < items.Count; i++)
+        {
+            PkgListItem it = items[i];
+            if (i > 0) sb.Append(",");
+            sb.Append("{\"package\":\"").Append(Esc(it.Package)).Append("\",\"title\":\"").Append(Esc(it.Title)).Append("\",\"path\":\"").Append(Esc(it.Path)).Append("\",\"installer\":\"").Append(Esc(it.Installer)).Append("\",\"user\":\"").Append(it.User ? "true" : "false").Append("\"}");
+        }
+        sb.Append("]");
+        d["scope"] = sc;
+        d["count"] = items.Count.ToString(CultureInfo.InvariantCulture);
+        d["appsJson"] = sb.ToString();
+        return d;
+    }
+
+    static Dictionary<string, string> AppDetail(string pkg)
+    {
+        Dictionary<string, string> d = Ok();
+        if (!SafePackage(pkg)) return Error(T("包名不合法。", "Invalid package name."));
+        string serial = CurrentSerial();
+        if (serial == "-") return Error(T("没有在线且已授权的 Quest。", "No authorized Quest online."));
+        string dump = Sh(serial, 10000, "dumpsys package " + pkg);
+        PkgDetail det = ParsePackageDump(dump, pkg);
+        string pmPath = Sh(serial, 4000, "pm path " + pkg);
+        foreach (string raw in Lines(pmPath))
+        {
+            string l = raw.Trim();
+            if (l.StartsWith("package:", StringComparison.OrdinalIgnoreCase))
+            {
+                det.ApkPath = l.Substring(8).Trim();
+                break;
+            }
+        }
+        if (det.ApkPath.Length > 0)
+        {
+            string ls = A(5000, "-s", serial, "shell", "ls", "-l", det.ApkPath);
+            Match m = Regex.Match(ls ?? "", @"\s(\d+)\s+\d{4}-");
+            if (!m.Success) m = Regex.Match(ls ?? "", @"\s(\d+)\s+[A-Za-z]");
+            long n;
+            if (m.Success && long.TryParse(m.Groups[1].Value, out n) && n > 0) det.SizeText = HumanSize(n);
+        }
+        bool user = IsUserPackage(serial, pkg);
+        d["package"] = det.Package;
+        d["title"] = PackageTitle(det.Package);
+        d["versionName"] = det.VersionName;
+        d["versionCode"] = det.VersionCode;
+        d["minSdk"] = det.MinSdk;
+        d["targetSdk"] = det.TargetSdk;
+        d["installer"] = det.Installer;
+        d["uid"] = det.Uid;
+        d["abi"] = det.Abi;
+        d["codePath"] = det.CodePath;
+        d["apkPath"] = det.ApkPath;
+        d["dataDir"] = det.DataDir;
+        d["firstInstall"] = det.FirstInstall;
+        d["lastUpdate"] = det.LastUpdate;
+        d["enabled"] = det.Enabled;
+        d["stopped"] = det.Stopped;
+        d["flags"] = det.Flags;
+        d["sizeText"] = det.SizeText;
+        d["user"] = user ? "true" : "false";
+        d["requestedJson"] = JsonStringArray(det.Requested);
+        StringBuilder rt = new StringBuilder("[");
+        for (int i = 0; i < det.Runtime.Count; i++)
+        {
+            string row = det.Runtime[i];
+            int c = row.LastIndexOf(':');
+            string name = c > 0 ? row.Substring(0, c) : row;
+            string granted = c > 0 ? row.Substring(c + 1) : "false";
+            if (i > 0) rt.Append(",");
+            rt.Append("{\"name\":\"").Append(Esc(name)).Append("\",\"granted\":\"").Append(Esc(granted)).Append("\"}");
+        }
+        rt.Append("]");
+        d["runtimeJson"] = rt.ToString();
+        return d;
+    }
+
+    static string JsonStringArray(List<string> items)
+    {
+        StringBuilder sb = new StringBuilder("[");
+        for (int i = 0; i < items.Count; i++)
+        {
+            if (i > 0) sb.Append(",");
+            sb.Append("\"").Append(Esc(items[i])).Append("\"");
+        }
+        return sb.Append("]").ToString();
+    }
+
+    static bool IsUserPackage(string serial, string pkg)
+    {
+        string raw = Sh(serial, 8000, "pm list packages -3");
+        foreach (string line in Lines(raw))
+        {
+            if (line.Trim().Equals("package:" + pkg, StringComparison.OrdinalIgnoreCase)) return true;
+        }
+        return false;
+    }
+
+    static Dictionary<string, string> AppAction(string query)
+    {
+        string op = Query(query, "op");
+        string pkg = Query(query, "package");
+        if (!SafePackage(pkg)) return Error(T("包名不合法。", "Invalid package name."));
+        string serial = CurrentSerial();
+        if (serial == "-") return Error(T("没有在线且已授权的 Quest。", "No authorized Quest online."));
+        bool user = IsUserPackage(serial, pkg);
+        try
+        {
+            if (op == "launch")
+            {
+                string r = MustA(8000, "-s", serial, "shell", "monkey", "-p", pkg, "-c", "android.intent.category.LAUNCHER", "1");
+                return ActionOk(T("已请求启动 ", "Launch requested: ") + pkg, r);
+            }
+            if (op == "force-stop")
+            {
+                MustA(5000, "-s", serial, "shell", "am", "force-stop", pkg);
+                return ActionOk(T("已强行停止 ", "Force-stopped ") + pkg, "");
+            }
+            if (op == "extract")
+            {
+                return ExtractApk(serial, pkg);
+            }
+            if (op == "uninstall")
+            {
+                if (!user) return Error(T("只能卸载第三方应用。", "Only third-party apps can be uninstalled."));
+                CmdResult r = RunResult(AdbPath, new string[] { "-s", serial, "uninstall", pkg }, 60000);
+                if ((r.Text ?? "").IndexOf("Success", StringComparison.OrdinalIgnoreCase) >= 0)
+                    return ActionOk(T("已卸载 ", "Uninstalled ") + pkg, r.Text);
+                return Error(T("卸载失败：", "Uninstall failed: ") + FirstMeaningfulLine(r.Text));
+            }
+            if (op == "clear")
+            {
+                if (!user) return Error(T("只能清除第三方应用数据。", "Only third-party app data can be cleared."));
+                string r = MustA(15000, "-s", serial, "shell", "pm", "clear", pkg);
+                return ActionOk(T("已清除数据 ", "Cleared data for ") + pkg, r);
+            }
+            if (op == "disable")
+            {
+                if (!user) return Error(T("只能禁用第三方应用。", "Only third-party apps can be disabled."));
+                string r = MustA(8000, "-s", serial, "shell", "pm", "disable-user", "--user", "0", pkg);
+                return ActionOk(T("已禁用 ", "Disabled ") + pkg, r);
+            }
+            if (op == "enable")
+            {
+                string r = MustA(8000, "-s", serial, "shell", "pm", "enable", pkg);
+                return ActionOk(T("已启用 ", "Enabled ") + pkg, r);
+            }
+            if (op == "grant" || op == "revoke")
+            {
+                string perm = Query(query, "permission");
+                if (!SafeName(perm) || perm.IndexOf("permission.", StringComparison.OrdinalIgnoreCase) < 0)
+                    return Error(T("权限名不合法。", "Invalid permission name."));
+                string r = MustA(8000, "-s", serial, "shell", "pm", op, pkg, perm);
+                return ActionOk((op == "grant" ? T("已授予 ", "Granted ") : T("已撤销 ", "Revoked ")) + perm, r);
+            }
+            return Error(T("未知应用操作。", "Unknown app operation."));
+        }
+        catch (Exception ex) { return Error(ex.Message); }
+    }
+
+    static Dictionary<string, string> ActionOk(string result, string extra)
+    {
+        Dictionary<string, string> d = Ok();
+        d["result"] = result;
+        if (!string.IsNullOrEmpty(extra)) d["output"] = extra;
+        Log(result);
+        return d;
+    }
+
+    static Dictionary<string, string> ExtractApk(string serial, string pkg)
+    {
+        string pmPath = Sh(serial, 4000, "pm path " + pkg);
+        string apk = "";
+        foreach (string raw in Lines(pmPath))
+        {
+            string l = raw.Trim();
+            if (l.StartsWith("package:", StringComparison.OrdinalIgnoreCase)) { apk = l.Substring(8).Trim(); break; }
+        }
+        if (apk.Length == 0) return Error(T("找不到该应用的 APK 路径。", "Could not find the APK path."));
+        if (apk.IndexOfAny(new char[] { ';', '|', '&', '<', '>', '`', '\n', '\r' }) >= 0)
+            return Error(T("APK 路径包含非法字符。", "APK path contains illegal characters."));
+        string dir = Path.Combine(LogDir, "apk-extract");
+        Directory.CreateDirectory(dir);
+        string dump = Sh(serial, 8000, "dumpsys package " + pkg);
+        PkgDetail det = ParsePackageDump(dump, pkg);
+        string ver = string.IsNullOrEmpty(det.VersionName) || det.VersionName == "-" ? "apk" : det.VersionName;
+        string fname = SanitizeDisplayName(pkg + "-" + ver) + ".apk";
+        string dest = Path.Combine(dir, fname);
+        CmdResult r = RunResult(AdbPath, new string[] { "-s", serial, "pull", apk, dest }, 180000);
+        if (!File.Exists(dest)) return Error(T("提取失败：", "Extract failed: ") + FirstMeaningfulLine(r.Text + " " + r.Error));
+        Dictionary<string, string> d = ActionOk(T("已提取到 ", "Extracted to ") + dest, r.Text);
+        d["file"] = dest;
+        d["fileName"] = fname;
+        d["url"] = "/api/apps/file?name=" + Uri.EscapeDataString(fname) + "&token=" + Token;
+        d["sizeText"] = HumanSize(new FileInfo(dest).Length);
+        return d;
+    }
+
+    static void ServeExtractedApk(Stream stream, string name)
+    {
+        string safe = SanitizeDisplayName(name);
+        if (!safe.EndsWith(".apk", StringComparison.OrdinalIgnoreCase)) { WriteBytes(stream, "text/plain; charset=utf-8", Encoding.UTF8.GetBytes("bad name")); return; }
+        string path = Path.Combine(LogDir, "apk-extract", safe);
+        if (!File.Exists(path)) { WriteBytes(stream, "text/plain; charset=utf-8", Encoding.UTF8.GetBytes("missing")); return; }
+        FileInfo fi = new FileInfo(path);
+        string head = "HTTP/1.1 200 OK\r\nContent-Type: application/vnd.android.package-archive\r\nContent-Disposition: attachment; filename=\"" + safe.Replace("\"", "") + "\"\r\nContent-Length: " + fi.Length + "\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n";
+        byte[] h = Encoding.ASCII.GetBytes(head);
+        stream.Write(h, 0, h.Length);
+        using (FileStream fs = File.OpenRead(path))
+        {
+            byte[] buf = new byte[65536];
+            int n;
+            while ((n = fs.Read(buf, 0, buf.Length)) > 0) stream.Write(buf, 0, n);
+        }
+    }
+
+    static readonly string[] QuestSettingIds = new string[] {
+        "global.stay_on_while_plugged_in",
+        "system.screen_off_timeout",
+        "secure.sleep_timeout",
+        "global.wifi_sleep_policy",
+        "system.screen_brightness",
+        "system.font_scale",
+        "system.haptic_feedback_enabled",
+        "secure.horizonos:world_movement_turn_type",
+        "secure.horizonos:world_movement_snap_turn_angle",
+        "secure.horizonos:world_movement_narrow_vision_for_comfort"
+    };
+
+    static Dictionary<string, string> QuestSettings()
+    {
+        Dictionary<string, string> d = Ok();
+        string serial = CurrentSerial();
+        if (serial == "-") return Error(T("没有在线且已授权的 Quest。", "No authorized Quest online."));
+        StringBuilder sb = new StringBuilder("[");
+        for (int i = 0; i < QuestSettingIds.Length; i++)
+        {
+            string id = QuestSettingIds[i];
+            int dot = id.IndexOf('.');
+            string ns = id.Substring(0, dot);
+            string key = id.Substring(dot + 1);
+            string val = Setting(serial, ns, key);
+            if (i > 0) sb.Append(",");
+            sb.Append("{\"id\":\"").Append(Esc(id)).Append("\",\"ns\":\"").Append(Esc(ns)).Append("\",\"key\":\"").Append(Esc(key)).Append("\",\"value\":\"").Append(Esc(val)).Append("\"}");
+        }
+        sb.Append("]");
+        d["settingsJson"] = sb.ToString();
+        return d;
+    }
+
+    static bool CatalogSetting(string ns, string key)
+    {
+        string id = ns + "." + key;
+        foreach (string s in QuestSettingIds) if (s == id) return true;
+        return false;
+    }
+
+    static Dictionary<string, string> AdbDownload()
+    {
+        try
+        {
+            string zip = Path.Combine(Path.GetTempPath(), "quest-platform-tools-" + Guid.NewGuid().ToString("N") + ".zip");
+            string destRoot = string.IsNullOrEmpty(RootDir) ? AppDomain.CurrentDomain.BaseDirectory : RootDir;
+            destRoot = destRoot.TrimEnd('\\', '/', '.');
+            if (destRoot.EndsWith(".")) destRoot = destRoot.TrimEnd('.');
+            string dest = Path.Combine(destRoot, "platform-tools");
+            Log("ADB download start -> " + dest);
+            try { ServicePointManager.SecurityProtocol = (SecurityProtocolType)3072; } catch { }
+            using (WebClient wc = new WebClient())
+            {
+                wc.Headers.Add("User-Agent", "Quest-ADB-Dashboard");
+                wc.DownloadFile("https://dl.google.com/android/repository/platform-tools-latest-windows.zip", zip);
+            }
+            Directory.CreateDirectory(dest);
+            string[] names = new string[] { "platform-tools/adb.exe", "platform-tools/AdbWinApi.dll", "platform-tools/AdbWinUsbApi.dll" };
+            using (FileStream fs = new FileStream(zip, FileMode.Open, FileAccess.Read))
+            {
+                foreach (string n in names)
+                {
+                    byte[] data = ExtractZipEntry(fs, n);
+                    if (data == null) data = ExtractZipEntry(fs, n.Replace('/', '\\'));
+                    if (data == null) continue;
+                    string outName = Path.GetFileName(n.Replace('/', Path.DirectorySeparatorChar));
+                    File.WriteAllBytes(Path.Combine(dest, outName), data);
+                }
+            }
+            try { File.Delete(zip); } catch { }
+            string adb = Path.Combine(dest, "adb.exe");
+            if (!File.Exists(adb)) return Error(T("下载完成但未找到 adb.exe。", "Download finished but adb.exe was missing."));
+            AdbPath = adb;
+            Dictionary<string, string> d = ActionOk(T("已安装 ADB：", "ADB installed: ") + adb, "");
+            d["adbPath"] = adb;
+            d["adbFound"] = "true";
+            return d;
+        }
+        catch (Exception ex) { return Error(T("下载 ADB 失败：", "ADB download failed: ") + ex.Message); }
     }
 }

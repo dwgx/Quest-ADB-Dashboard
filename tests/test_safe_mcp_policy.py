@@ -121,6 +121,12 @@ class SafeMcpPolicyTests(unittest.TestCase):
         benign = "version 14 build PR1.0 model Quest_3"
         self.assertEqual(redact(benign), benign)
 
+    def test_safe_shell_commands_have_no_personal_packages(self):
+        self.assertNotIn("virtualdesktop_recovered_package", module.SAFE_SHELL_COMMANDS)
+        joined = " ".join(module.SAFE_SHELL_COMMANDS.values())
+        self.assertNotIn("dwgx1", joined)
+        self.assertNotIn("com.dwgx1.virtualdesktop.recovered", joined)
+
 
 if __name__ == "__main__":
     unittest.main()

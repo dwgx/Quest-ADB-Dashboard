@@ -1,5 +1,30 @@
 # Release Notes
 
+## v0.3.0
+
+App library, headset settings panel, zh/en UI, and ADB bootstrap.
+
+- Installed-apps page lists third-party (or all) packages from the headset,
+  opens a Quest-style detail card (version, SDK, installer, times, ABI, size,
+  runtime + declared permissions), and can launch, extract the APK to
+  `Quest_ADB_Logs/apk-extract/`, force-stop, enable/disable, clear data, or
+  uninstall. Uninstall/clear/disable stay on third-party packages and require
+  confirm. Extract is a read-only `adb pull`.
+- Headset settings panel covers power/sleep, brightness/font/haptics, and
+  Horizon OS comfort (`horizonos:world_movement_*`) plus the existing wireless
+  ADB actions. Custom settings/broadcast remain under Advanced.
+- UI language auto-selects from Windows UI culture, then the Quest
+  `persist.sys.locale`, with a toolbar ZH/EN override stored in localStorage.
+- If `adb.exe` is missing, the BAT asks before downloading Google
+  `platform-tools-latest-windows.zip` next to the launcher; the WebUI offers
+  the same download behind confirm.
+- Share-safe HTML export now redacts all IPv4 (not only RFC1918), IPv6, and
+  `getprop` `[ro.serialno]: [VALUE]` forms. Personal
+  `com.dwgx1.virtualdesktop.recovered` capture removed from the safe MCP
+  whitelist.
+
+MCP servers still hard-block install/uninstall.
+
 ## v0.2.0
 
 APK install support in the WebUI, bundled ADB, and audit hardening.

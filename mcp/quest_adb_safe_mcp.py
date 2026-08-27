@@ -66,7 +66,6 @@ SAFE_SHELL_COMMANDS: dict[str, str] = {
     "ip_addr": "ip addr",
     "ip_route": "ip route",
     "virtualdesktop_package": "dumpsys package VirtualDesktop.Android",
-    "virtualdesktop_recovered_package": "dumpsys package com.dwgx1.virtualdesktop.recovered",
     "oculus_packages": "dumpsys package com.oculus",
     "logcat_tail_private": "logcat -d -t 3000",
 }

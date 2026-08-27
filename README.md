@@ -24,9 +24,15 @@ USB debugging is authorized.
 - Runs as one end-user file: `dist/Quest_ADB_Tools.bat`.
 - Starts a local WebUI bound to `127.0.0.1`.
 - Shows connection, battery, power, Wi-Fi, storage, memory, display, thermal, controller hints, build metadata, and factory/calibration clues.
-- Installs an APK from the browser: drag a file onto the **应用安装** page to
-  see its package, version, and permissions, then confirm to `adb install`
-  (with reinstall / grant-permissions / downgrade options).
+- Manages apps from the browser **应用** page: list installed packages with
+  Quest-style details (version, SDK, installer, permissions), extract the APK
+  to the PC, uninstall/force-stop/clear data (third-party, confirm-gated), and
+  sideload a new APK with live progress.
+- Shows a **头显设置** panel for power/sleep, display, comfort movement, and
+  wireless ADB.
+- Switches the WebUI between Chinese and English from the Windows UI language
+  (and the headset locale), with a toolbar override.
+- If `adb.exe` is missing, asks before downloading Google platform-tools.
 - Provides an optional read-only MCP server for CI/agent inventory workflows.
 - Exports two standalone HTML reports:
   - `share-safe`: redacted report intended for support posts, GitHub issues, and screenshots.

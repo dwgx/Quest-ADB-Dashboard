@@ -3,7 +3,7 @@
 ## Findings To Check Before Commit
 
 - The repository must not contain real Quest serial numbers, LAN IPs, BSSIDs, MAC addresses, or private `logcat` output.
-- The share-safe export must redact serial-like values, MAC/BSSID values, LAN IPs, SSID/BSSID lines, fingerprints, and session-like IDs.
+- The share-safe export must redact serial-like values (including `[ro.serialno]: [VALUE]`), MAC/BSSID values, all IPv4 addresses, IPv6 addresses, SSID/BSSID lines, fingerprints, and session-like IDs.
 - The export endpoint must be read-only and must not call write/state-changing ADB commands.
 - The safe MCP server must expose only whitelisted read-only ADB commands and no arbitrary shell.
 - WebUI service must stay on `127.0.0.1`.

@@ -125,6 +125,30 @@ body:not(.dark) .adbOut{background:#0f1720;color:#cfe0f0}
 .permsPop.show{display:block}
 @media (prefers-reduced-motion: reduce){.appCard,.appCard.glow,.dropEmpty svg,.installBtn.installing .installFill:after,.installBtn.done .chk path,.installBtn.failed{animation:none}}
 @media(max-width:820px){.appHero{grid-template-columns:1fr;text-align:center;justify-items:center}}
+.tabs{display:flex;gap:6px;background:var(--soft);border:1px solid var(--line);padding:4px;border-radius:12px;width:fit-content}
+.tabs button{height:34px;border:0;background:transparent;color:var(--muted);border-radius:9px;padding:0 14px;font-weight:800;cursor:pointer}
+.tabs button.on{background:var(--card);color:var(--text);box-shadow:var(--shadow)}
+.appLib{display:grid;grid-template-columns:300px 1fr;gap:15px;min-height:520px}
+.appList{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;display:flex;flex-direction:column}
+.appSearch{padding:10px 12px;border-bottom:1px solid var(--line)}
+.appSearch input{width:100%}
+.appRows{overflow:auto;flex:1}
+.appRow{display:grid;grid-template-columns:40px 1fr;gap:10px;align-items:center;padding:10px 12px;cursor:pointer;border-bottom:1px solid var(--line)}
+.appRow:hover{background:rgba(37,99,235,.06)}.appRow.on{background:rgba(37,99,235,.12)}
+.appGlyph{width:40px;height:40px;border-radius:11px;display:grid;place-items:center;color:#fff;font-weight:900}
+.appRow b{display:block;font-size:13px}.appRow span{display:block;color:var(--muted);font-size:11px;word-break:break-all}
+.appDetail{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);min-height:520px}
+.appEmpty{padding:48px 24px;color:var(--muted);text-align:center}
+.actBar{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+.permRow{display:grid;grid-template-columns:1fr auto auto;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line);font-size:12px}
+.permRow:last-child{border-bottom:0}
+.setGrid{display:grid;gap:12px}
+.setRow{display:grid;grid-template-columns:1.4fr 1fr auto;gap:12px;align-items:center;border:1px solid var(--line);background:var(--soft);border-radius:10px;padding:12px}
+.setRow b{display:block}.setRow span{display:block;color:var(--muted);font-size:12px;margin-top:3px}
+.banner{border:1px solid rgba(217,119,6,.35);background:rgba(217,119,6,.08);border-radius:10px;padding:12px 14px;display:none;align-items:center;justify-content:space-between;gap:12px}
+.banner.show{display:flex}
+.langBtn{height:36px;min-width:52px}
+@media(max-width:1100px){.appLib,.setRow{grid-template-columns:1fr}}
 /* --- shared --- */
 .paramList{display:grid;gap:11px}
 .paramItem{display:grid;grid-template-columns:1.2fr .8fr .8fr auto;gap:11px;align-items:center;border:1px solid var(--line);background:var(--soft);border-radius:9px;padding:11px 13px}
@@ -163,16 +187,16 @@ body:not(.dark) .adbOut{background:#0f1720;color:#cfe0f0}
 </svg>
 <div class="app">
 <aside class="side">
-<div class="brand"><div class="brandIcon"><svg width="22" height="22"><use href="#i-vr"/></svg></div><div><b>Quest ADB</b><span>Single-BAT WebUI</span></div></div>
+<div class="brand"><div class="brandIcon"><svg width="22" height="22"><use href="#i-vr"/></svg></div><div><b>Quest ADB</b><span data-i18n="brandSub">Single-BAT WebUI</span></div></div>
 <nav class="nav">
-<a href="#overview" class="active"><svg><use href="#i-home"/></svg>总览</a>
-<a href="#console"><svg><use href="#i-console"/></svg>快捷控制台</a>
-<a href="#install"><svg><use href="#i-apk"/></svg>应用安装</a>
-<a href="#device"><svg><use href="#i-info"/></svg>设备信息</a>
-<a href="#settings"><svg><use href="#i-settings"/></svg>高级 settings</a>
-<a href="#logs"><svg><use href="#i-log"/></svg>日志</a>
+<a href="#overview" class="active"><svg><use href="#i-home"/></svg><span data-i18n="navOverview">总览</span></a>
+<a href="#console"><svg><use href="#i-console"/></svg><span data-i18n="navConsole">快捷控制台</span></a>
+<a href="#apps"><svg><use href="#i-apk"/></svg><span data-i18n="navApps">应用</span></a>
+<a href="#headset"><svg><use href="#i-settings"/></svg><span data-i18n="navHeadset">头显设置</span></a>
+<a href="#device"><svg><use href="#i-info"/></svg><span data-i18n="navDevice">设备信息</span></a>
+<a href="#logs"><svg><use href="#i-log"/></svg><span data-i18n="navLogs">日志</span></a>
 </nav>
-<div class="navFoot">只监听 127.0.0.1<br>关闭窗口即停止服务</div>
+<div class="navFoot" data-i18n="navFoot">只监听 127.0.0.1<br>关闭窗口即停止服务</div>
 </aside>
 <main class="main">
 <header class="top">
@@ -181,12 +205,14 @@ body:not(.dark) .adbOut{background:#0f1720;color:#cfe0f0}
 <span class="chip" id="statusChip"><i class="chipDot"></i><span>未连接</span></span>
 <span class="chip">ADB <b id="adbShort">adb.exe</b></span>
 <span class="chip">Wi-Fi <b id="wifiChip">-</b></span>
+<button class="btn ghost langBtn" id="langBtn">EN</button>
 <button class="btn ghost" id="themeBtn">浅色</button>
 <button class="btn primary" id="refreshBtn">刷新</button>
 </div>
 </header>
 <div class="wrap">
-<div class="notice">保活、24 小时亮屏和无线 ADB 只建议短时间测试；结束后执行“安全熄屏”或“保守默认值”。安装 APK 会修改设备，请确认来源可信。</div>
+<div class="banner" id="adbBanner"><div><b data-i18n="adbMissingTitle">未找到 ADB</b><div class="hint" data-i18n="adbMissingHint">本机没有可用的 adb.exe。可以下载 Google platform-tools 到工具目录。</div></div><button class="btn primary" id="adbDownloadBtn" data-i18n="adbDownload">下载 ADB</button></div>
+<div class="notice" data-i18n="topNotice">保活、24 小时亮屏和无线 ADB 只建议短时间测试；结束后执行“安全熄屏”或“保守默认值”。安装 APK 会修改设备，请确认来源可信。</div>
 
 <section class="page active" id="overview">
 <div class="row">
@@ -234,7 +260,52 @@ body:not(.dark) .adbOut{background:#0f1720;color:#cfe0f0}
 </table></div></div>
 </section>
 
-<section class="page" id="install">
+<section class="page" id="apps">
+<div class="tabs" id="appTabs"><button class="on" data-tab="installed" id="tabInstalled">已安装</button><button data-tab="sideload" id="tabSideload">安装 APK</button></div>
+<div id="appsInstalled">
+<div class="appLib">
+<div class="appList">
+<div class="appSearch"><input id="appFilter" placeholder="搜索包名"><div class="pillRow" style="margin-top:8px"><span class="pill" id="scopeUser" style="cursor:pointer">第三方</span><span class="pill" id="scopeAll" style="cursor:pointer">全部</span><span class="pill" id="scopeSystem" style="cursor:pointer">系统</span></div></div>
+<div class="appRows" id="appRows"><div class="appEmpty" id="appListEmpty">连接 Quest 后在这里列出应用。</div></div>
+</div>
+<div class="appDetail" id="appDetailPane"><div class="appEmpty" id="appDetailEmpty">选择左侧应用查看详情、权限、提取 APK 或卸载。</div>
+<div id="appDetailBody" style="display:none;padding:18px">
+<div class="appHero">
+<div class="appIconTile" id="detGlyph">A</div>
+<div><div class="appName" id="detTitle">-</div><div class="pillRow" id="detPills"></div></div>
+</div>
+<div class="actBar">
+<button class="btn primary" id="detLaunch">打开</button>
+<button class="btn" id="detExtract">提取 APK</button>
+<button class="btn" id="detStop">强行停止</button>
+<button class="btn" id="detEnable">启用</button>
+<button class="btn" id="detDisable">禁用</button>
+<button class="btn" id="detClear">清除数据</button>
+<button class="btn" id="detUninstall" style="border-color:var(--red);color:var(--red)">卸载</button>
+</div>
+<div class="hint" id="detExtractHint" style="margin-top:8px"></div>
+<table class="table" style="margin-top:16px">
+<tr><td>包名</td><td id="detPackage">-</td></tr>
+<tr><td>版本</td><td id="detVersion">-</td></tr>
+<tr><td>SDK</td><td id="detSdk">-</td></tr>
+<tr><td>安装来源</td><td id="detInstaller">-</td></tr>
+<tr><td>UID / ABI</td><td id="detUidAbi">-</td></tr>
+<tr><td>大小</td><td id="detSize">-</td></tr>
+<tr><td>首次安装</td><td id="detFirst">-</td></tr>
+<tr><td>最近更新</td><td id="detUpdate">-</td></tr>
+<tr><td>APK 路径</td><td id="detPath">-</td></tr>
+<tr><td>数据目录</td><td id="detData">-</td></tr>
+<tr><td>状态</td><td id="detState">-</td></tr>
+</table>
+<div class="head" style="padding:12px 0 6px;height:auto;border:0"><h2>运行时权限</h2></div>
+<div id="detRuntime"></div>
+<div class="head" style="padding:12px 0 6px;height:auto;border:0"><h2>声明权限</h2></div>
+<div class="log" id="detRequested"></div>
+</div>
+</div>
+</div>
+</div>
+<div id="appsSideload" style="display:none">
 <div class="appWrap">
 <div class="appCard" id="appCard">
 <!-- empty / drop state -->
@@ -260,6 +331,7 @@ body:not(.dark) .adbOut{background:#0f1720;color:#cfe0f0}
 <div class="permsPop" id="apkPerms"></div>
 <div class="adbOut" id="adbOut"></div>
 <div style="margin-top:12px;display:flex;gap:14px;flex-wrap:wrap"><a href="#" id="apkPermsBtn" style="color:var(--blue);font-weight:700;font-size:13px">查看权限</a><a href="#" id="apkReset" style="color:var(--muted);font-weight:700;font-size:13px">换一个 APK</a></div>
+</div>
 </div>
 </div>
 </div>
@@ -296,10 +368,22 @@ body:not(.dark) .adbOut{background:#0f1720;color:#cfe0f0}
 <div class="card"><div class="head"><h2>工厂 / 校准推断边界</h2></div><div class="body"><div class="log">可以显示 Quest 公开 ADB 暴露的 Factory / Online calibration 线索，例如 Eureka、PVT1.1、station/location/test 代码。不能把内部代码可靠翻译成具体国家、城市或工厂；Wi-Fi 国家码也不等于出产地。完整字段请用“一键导出设备全部信息”。</div></div></div>
 </section>
 
-<section class="page" id="settings">
-<div class="card"><div class="head"><h2>自定义 settings put</h2></div><div class="body form"><select id="customNs"><option>global</option><option>system</option><option>secure</option></select><input id="customKey" placeholder="键名，例如 screen_off_timeout"><input id="customValue" placeholder="值"><button class="btn" id="customSet">写入</button></div></div>
-<div class="card"><div class="head"><h2>发送自定义广播</h2></div><div class="body form" style="grid-template-columns:1fr 90px"><input id="broadcastName" placeholder="例如 com.oculus.vrpowermanager.prox_open"><button class="btn" id="customBroadcast">发送</button></div></div>
+<section class="page" id="headset">
+<div class="card"><div class="head"><h2 data-i18n="hsPower">电源与休眠</h2><span class="tag" id="hsWarn"></span></div><div class="body"><div class="paramList" id="hsPowerList"></div></div></div>
+<div class="card"><div class="head"><h2 data-i18n="hsDisplay">显示</h2><span class="tag" id="hsDisplayTag">-</span></div><div class="body setGrid" id="hsDisplay"></div></div>
+<div class="card"><div class="head"><h2 data-i18n="hsComfort">舒适 / 移动</h2><span class="tag">horizonos</span></div><div class="body setGrid" id="hsComfort"></div></div>
+<div class="card"><div class="head"><h2 data-i18n="hsWireless">无线 ADB</h2></div><div class="body cmdGrid">
+<button class="cmd amber dangerAction" data-action="wireless"><b data-i18n="cmdWireless">开启无线 ADB</b><span>tcpip 5555</span></button>
+<button class="cmd amber dangerAction" data-action="wireless_off"><b data-i18n="cmdWirelessOff">关闭无线 ADB</b><span>USB</span></button>
+<button class="cmd blue" data-action="conservative"><b data-i18n="cmdConservative">保守默认值</b><span>恢复休眠</span></button>
+</div></div>
+<div class="card"><div class="head"><h2 data-i18n="hsAdvanced">高级</h2></div><div class="body">
+<div class="form"><select id="customNs"><option>global</option><option>system</option><option>secure</option></select><input id="customKey" placeholder="screen_off_timeout"><input id="customValue" placeholder="value"><button class="btn" id="customSet">put</button></div>
+<div class="form" style="grid-template-columns:1fr 90px;margin-top:12px"><input id="broadcastName" placeholder="com.oculus.vrpowermanager.prox_open"><button class="btn" id="customBroadcast">send</button></div>
+</div></div>
 </section>
+<section class="page" id="settings"></section>
+<section class="page" id="install"></section>
 
 <section class="page" id="logs">
 <div class="card"><div class="head"><h2>日志</h2><button class="btn ghost" id="refreshLogs">刷新日志</button></div><div class="body"><div class="metaItem" style="margin-bottom:12px"><span>日志文件</span><b id="logPath">-</b></div><div class="log" id="logBox">等待操作...</div></div></div>
@@ -308,8 +392,17 @@ body:not(.dark) .adbOut{background:#0f1720;color:#cfe0f0}
 </div></main></div>
 <script>
 const TOKEN='[[TOKEN]]';
+const BOOT_LANG='[[LANG]]';
 const $=id=>document.getElementById(id);
-const pages={overview:['总览','状态指标和设备概览'],console:['快捷控制台','更多常用 ADB 操作入口'],install:['应用安装','拖入 APK，用 ADB 安装到 Quest'],device:['设备信息','系统、Virtual Desktop、手柄和电源线索'],settings:['高级 settings','谨慎写入 Android settings 或广播'],logs:['日志','最近一次操作结果']};
+const I18N={
+zh:{navOverview:'总览',navConsole:'快捷控制台',navApps:'应用',navHeadset:'头显设置',navDevice:'设备信息',navLogs:'日志',navFoot:'只监听 127.0.0.1\n关闭窗口即停止服务',brandSub:'本地 WebUI',topNotice:'保活、24 小时亮屏和无线 ADB 只建议短时间测试；结束后执行“安全熄屏”或“保守默认值”。安装 APK 会修改设备，请确认来源可信。',adbMissingTitle:'未找到 ADB',adbMissingHint:'本机没有可用的 adb.exe。可以下载 Google platform-tools 到工具目录。',adbDownload:'下载 ADB',pageOverview:['总览','状态指标和设备概览'],pageConsole:['快捷控制台','常用 ADB 操作'],pageApps:['应用','已安装应用、详情、提取与卸载'],pageHeadset:['头显设置','电源、显示、舒适移动与高级写入'],pageDevice:['设备信息','系统、Virtual Desktop、手柄和电源线索'],pageLogs:['日志','最近一次操作结果'],tabInstalled:'已安装',tabSideload:'安装 APK',scopeUser:'第三方',scopeAll:'全部',scopeSystem:'系统',extractOk:'提取完成',uninstallAsk:'将卸载该应用并清除其数据。',clearAsk:'将清除该应用全部数据。',disableAsk:'将禁用该应用。'},
+en:{navOverview:'Overview',navConsole:'Console',navApps:'Apps',navHeadset:'Headset',navDevice:'Device',navLogs:'Logs',navFoot:'Loopback 127.0.0.1 only\nClose the window to stop',brandSub:'Local WebUI',topNotice:'Keep-awake, 24h screen, and wireless ADB are for short tests. Use Safe sleep or Conservative defaults when done. Installing APKs changes the headset — only use packages you trust.',adbMissingTitle:'ADB not found',adbMissingHint:'No adb.exe on this PC. You can download Google platform-tools into the tool folder.',adbDownload:'Download ADB',pageOverview:['Overview','Status and device snapshot'],pageConsole:['Console','Common ADB actions'],pageApps:['Apps','Installed apps, details, extract, uninstall'],pageHeadset:['Headset','Power, display, comfort, advanced writes'],pageDevice:['Device','System, Virtual Desktop, controllers, power'],pageLogs:['Logs','Latest command output'],tabInstalled:'Installed',tabSideload:'Install APK',scopeUser:'User',scopeAll:'All',scopeSystem:'System',extractOk:'Extracted',uninstallAsk:'This uninstalls the app and deletes its data.',clearAsk:'This clears all app data.',disableAsk:'This disables the app.'}
+};
+function detectLang(){const s=localStorage.getItem('questAdbLang');if(s==='zh'||s==='en')return s;const q=(last&&last.questLocale||'').toLowerCase();if(q.indexOf('zh')===0)return 'zh';if(BOOT_LANG==='zh'||BOOT_LANG==='en')return BOOT_LANG;const n=(navigator.language||'').toLowerCase();return n.indexOf('zh')===0?'zh':'en'}
+let LANG=detectLang();
+function t(k){const pack=I18N[LANG]||I18N.zh;return pack[k]!=null?pack[k]:((I18N.zh[k])||k)}
+function applyI18n(){document.querySelectorAll('[data-i18n]').forEach(el=>{const k=el.getAttribute('data-i18n');const v=t(k);if(el.tagName==='INPUT')el.placeholder=v;else el.textContent=v});if($('langBtn'))$('langBtn').textContent=LANG==='zh'?'EN':'中文';if($('tabInstalled'))$('tabInstalled').textContent=t('tabInstalled');if($('tabSideload'))$('tabSideload').textContent=t('tabSideload');if($('scopeUser'))$('scopeUser').textContent=t('scopeUser');if($('scopeAll'))$('scopeAll').textContent=t('scopeAll');if($('scopeSystem'))$('scopeSystem').textContent=t('scopeSystem')}
+const pages={overview:'pageOverview',console:'pageConsole',apps:'pageApps',headset:'pageHeadset',device:'pageDevice',logs:'pageLogs',install:'pageApps',settings:'pageHeadset'};
 const themeKey='questAdbThemeV7';
 const confirmText={
   debug_mode:'会开启保持唤醒、Wi-Fi 不休眠、24 小时屏幕和 prox_close，只建议短时间调试。',
@@ -321,7 +414,8 @@ const confirmText={
   prox_close:'会模拟佩戴靠近，可能阻止自动熄屏。',
   restore_backup:'会把首次写入前备份值恢复回 Quest，并发送 prox_open。',
   custom_setting:'会直接写 Android settings。错误键值可能影响休眠、网络或调试。',
-  custom_broadcast:'会发送自定义 Android 广播，只建议你明确知道 action 含义时使用。'
+  custom_broadcast:'会发送自定义 Android 广播，只建议你明确知道 action 含义时使用。',
+  quest_put:'会写入头显设置面板中的允许项。错误值可能影响休眠或显示。'
 };
 const paramDefs=[
   {key:'stayOn',name:'保持唤醒',setting:'global.stay_on_while_plugged_in',safe:'0',action:'reset_stay_on',note:'0=允许正常休眠；3=USB/AC 插电保持唤醒'},
@@ -347,9 +441,9 @@ function ring(id,text,label,percent,cls){const box=$(id);if(!box)return;box.clas
 function norm(x){return shown(x).trim()}
 function isSafeValue(def,value){const val=norm(value);if(def.safe==='null')return val==='null'||val==='-';return val===def.safe}
 function renderParams(){const host=$('paramList');if(!host)return;host.innerHTML='';let changed=0;const offline=last.connected!=='true';paramDefs.forEach(def=>{const val=norm(last[def.key]);const ok=!offline&&isSafeValue(def,val);if(!ok&&!offline)changed++;const item=document.createElement('div');item.className='paramItem '+(offline?'':ok?'ok':'changed');const state=offline?'未读取':(ok?'默认值':'已修改');item.innerHTML='<div class="paramName"><b>'+esc(def.name)+'</b><span>'+esc(def.setting)+'</span></div><div class="paramValue"><span>当前值</span><b>'+esc(val)+'</b></div><div class="paramValue"><span>默认值</span><b>'+esc(def.safe)+'</b></div><div><span class="paramState">'+esc(state)+'</span> '+(!offline&&!ok?'<button class="resetBtn primary" data-reset="'+esc(def.action)+'">重置</button>':'')+'</div><div class="paramName" style="grid-column:1/-1"><span>'+esc(def.note)+'</span></div>';host.appendChild(item)});set('paramSummary',offline?'未连接':changed?changed+' 项已修改':'全部默认');host.querySelectorAll('[data-reset]').forEach(btn=>btn.onclick=()=>action(btn.dataset.reset,'','重置参数',btn,false))}
-async function api(path,opts={}){const o=Object.assign({cache:'no-store'},opts);o.headers=Object.assign({'X-Quest-Token':TOKEN},opts.headers||{});const r=await fetch(path,o);if(!r.ok)throw new Error('HTTP '+r.status);return await r.json()}
+async function api(path,opts={}){const o=Object.assign({cache:'no-store'},opts);o.headers=Object.assign({'X-Quest-Token':TOKEN,'X-Quest-Lang':LANG},opts.headers||{});const r=await fetch(path,o);if(!r.ok)throw new Error('HTTP '+r.status);return await r.json()}
 async function loadLogs(showNotice=false){try{const r=await api('/api/logs');set('logPath',r.logFile);set('logBox',r.text||'暂无日志');if(showNotice)notify('日志已刷新',r.logFile||'-','ok')}catch(e){set('logBox','日志读取失败：'+e.message);if(showNotice)notify('日志读取失败',e.message,'err',4200)}}
-async function refresh(showNotice=false){try{last=await api('/api/status');const c=last.connected==='true';$('statusChip').classList.toggle('connected',c);$('statusChip').querySelector('span').textContent=c?'已连接':(last.deviceState==='unauthorized'?'未授权':last.deviceState==='offline'?'离线':'未连接');set('stateBig',last.deviceState||'none');$('stateBig').classList.toggle('good',c);set('stateHint',last.hint);set('heroModel',last.model&&last.model!=='-'?last.model:'Quest');set('deviceTag',last.deviceState||'none');set('adbShort',shortPath(last.adbPath));set('wifiChip',v('wifiIp'));set('wifiIpLite',v('wifiIp'));set('leftControllerLite',v('controllerLeftBattery'));set('rightControllerLite',v('controllerRightBattery'));set('leftControllerState',v('controllerLeftStatus'));set('rightControllerState',v('controllerRightStatus'));set('clockText',new Date().toLocaleTimeString());const b=v('batteryLevel'),t=v('batteryTemp'),w=v('wakefulness'),bn=parseFloat(b),tn=parseFloat(t);ring('batteryGauge',b==='-'?'--%':b+'%','电量',pct(b),!isFinite(bn)?'':bn<20?'red':bn<45?'amber':'green');ring('tempGauge',t==='-'?'--°C':t+'°C','温度',pct(t,55),!isFinite(tn)?'':tn>=45?'red':tn>=38?'amber':'green');const awake=(w||'').toLowerCase().includes('awake');ring('sleepGauge',w==='-'?'-':w,last.mStayOn==='true'?'保持唤醒':'休眠',awake?100:28,awake?'amber':'green');Object.keys(last).forEach(k=>set(k,last[k]));set('powerSource2',last.powerSource);set('logPath',last.logFile);set('consoleState',last.deviceState);set('consoleConn',c?'已连接':'未连接');set('consoleBattery',b==='-'?'-':b+'%');set('consoleWake',w);set('consoleWifi',v('wifiIp'));renderParams();if(showNotice)notify('刷新完成',c?'已连接：'+(last.model||'Quest')+'，电量 '+b+'%':(last.hint||'未连接'),c?'ok':'warn')}catch(e){log('刷新失败：'+e.message);renderParams();if(showNotice)notify('刷新失败',e.message,'err',4200)}}
+async function refresh(showNotice=false){try{last=await api('/api/status');const c=last.connected==='true';$('statusChip').classList.toggle('connected',c);$('statusChip').querySelector('span').textContent=c?'已连接':(last.deviceState==='unauthorized'?'未授权':last.deviceState==='offline'?'离线':'未连接');set('stateBig',last.deviceState||'none');$('stateBig').classList.toggle('good',c);set('stateHint',last.hint);set('heroModel',last.model&&last.model!=='-'?last.model:'Quest');set('deviceTag',last.deviceState||'none');set('adbShort',shortPath(last.adbPath));set('wifiChip',v('wifiIp'));set('wifiIpLite',v('wifiIp'));set('leftControllerLite',v('controllerLeftBattery'));set('rightControllerLite',v('controllerRightBattery'));set('leftControllerState',v('controllerLeftStatus'));set('rightControllerState',v('controllerRightStatus'));set('clockText',new Date().toLocaleTimeString());const b=v('batteryLevel'),t=v('batteryTemp'),w=v('wakefulness'),bn=parseFloat(b),tn=parseFloat(t);ring('batteryGauge',b==='-'?'--%':b+'%','电量',pct(b),!isFinite(bn)?'':bn<20?'red':bn<45?'amber':'green');ring('tempGauge',t==='-'?'--°C':t+'°C','温度',pct(t,55),!isFinite(tn)?'':tn>=45?'red':tn>=38?'amber':'green');const awake=(w||'').toLowerCase().includes('awake');ring('sleepGauge',w==='-'?'-':w,last.mStayOn==='true'?'保持唤醒':'休眠',awake?100:28,awake?'amber':'green');Object.keys(last).forEach(k=>set(k,last[k]));set('powerSource2',last.powerSource);set('logPath',last.logFile);set('consoleState',last.deviceState);set('consoleConn',c?'已连接':'未连接');set('consoleBattery',b==='-'?'-':b+'%');set('consoleWake',w);set('consoleWifi',v('wifiIp'));renderParams();renderHeadset();syncAdbBanner();if(!localStorage.getItem('questAdbLang')){const next=detectLang();if(next!==LANG){LANG=next;applyI18n()}}if(showNotice)notify('刷新完成',c?'已连接：'+(last.model||'Quest')+'，电量 '+b+'%':(last.hint||'未连接'),c?'ok':'warn')}catch(e){log('刷新失败：'+e.message);renderParams();if(showNotice)notify('刷新失败',e.message,'err',4200)}}
 function setBusy(on,btn){busy=on;document.querySelectorAll('button').forEach(b=>b.disabled=on);if(btn)btn.classList.toggle('is-busy',on)}
 async function action(a,extra='',label='操作',btn=null,confirmed=false){if(busy)return notify('已有操作执行中','请等待上一条命令完成。','warn');try{setBusy(true,btn);log('执行中：'+label);notify(label,'正在发送命令...','warn',1800);let url='/api/action?action='+encodeURIComponent(a)+extra;if(confirmed)url+='&confirm=YES';const r=await api(url,{method:'POST'});if(r.ok!=='true')throw new Error(r.error||'操作失败');log(r.result||'完成');notify(label+'完成',r.result||'完成','ok');setTimeout(()=>{refresh(false);loadLogs(false)},500)}catch(e){log('操作失败：'+e.message);notify(label+'失败',e.message,'err',4600);loadLogs(false)}finally{setBusy(false,btn)}}
 async function exportHtml(){if(busy)return notify('已有操作执行中','请等待上一条命令完成。','warn');const btn=$('exportBtn');try{setBusy(true,btn);set('exportStatus','正在只读采集完整设备信息，可能需要 10-40 秒...');$('exportLinks').innerHTML='';notify('开始导出','正在生成私有完整版和分享安全版 HTML','warn',2200);const r=await api('/api/export?mode=both',{method:'POST'});if(r.ok!=='true')throw new Error(r.error||'导出失败');set('exportStatus','导出完成：'+(r.sectionCount||'-')+' 个采集段，耗时 '+Math.round((parseInt(r.durationMs||'0',10)||0)/1000)+' 秒。');$('exportLinks').innerHTML='<a target="_blank" href="'+esc(r.privateUrl)+'">打开私有完整版 HTML</a><a target="_blank" href="'+esc(r.safeUrl)+'">打开分享安全版 HTML</a><span>'+esc(r.safePath||'')+'</span>';notify('导出完成','已生成两份 HTML 报告','ok');loadLogs(false)}catch(e){set('exportStatus','导出失败：'+e.message);notify('导出失败',e.message,'err',5200);loadLogs(false)}finally{setBusy(false,btn)}}
@@ -451,13 +545,41 @@ function initInstaller(){
   ['dragenter','dragover'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.add('over')}));
   ['dragleave','drop'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();if(ev==='dragleave'&&drop.contains(e.relatedTarget))return;drop.classList.remove('over')}));
   drop.addEventListener('drop',e=>{const f=e.dataTransfer&&e.dataTransfer.files&&e.dataTransfer.files[0];if(f)uploadApk(f)});
-  const page=$('install');page.addEventListener('dragover',e=>e.preventDefault());page.addEventListener('drop',e=>{e.preventDefault();const f=e.dataTransfer&&e.dataTransfer.files&&e.dataTransfer.files[0];if(f&&/\.apk$/i.test(f.name))uploadApk(f)});
+  const page=$('appsSideload')||$('apps');if(page){page.addEventListener('dragover',e=>e.preventDefault());page.addEventListener('drop',e=>{e.preventDefault();const f=e.dataTransfer&&e.dataTransfer.files&&e.dataTransfer.files[0];if(f&&/\.apk$/i.test(f.name))uploadApk(f)})}
   $('installBtn').onclick=installApk;
   $('apkPermsBtn').onclick=e=>{e.preventDefault();$('apkPerms').classList.toggle('show')};
   $('apkReset').onclick=e=>{e.preventDefault();$('apkDrop').querySelector('b').textContent='拖拽 APK 到这里，或点击选择';$('apkDrop').querySelector('#dropHint').textContent='本地上传后由 ADB 安装到已连接的 Quest。安装前会二次确认。';resetApk()};
   // clicking the perm pill also opens perms
   document.addEventListener('click',e=>{if(e.target&&e.target.id==='permPill')$('apkPerms').classList.toggle('show')});
 }
+
+let appScope='user',appCache=[],appSel=null,hsCache=[];
+function hue(s){let h=0;for(let i=0;i<(s||'').length;i++)h=(h*31+s.charCodeAt(i))>>>0;return h%360}
+function syncAdbBanner(){const miss=last.adbFound==='false';if($('adbBanner'))$('adbBanner').classList.toggle('show',miss)}
+function setAppTab(tab){const inst=tab!=='sideload';$('appsInstalled').style.display=inst?'':'none';$('appsSideload').style.display=inst?'none':'';$('tabInstalled').classList.toggle('on',inst);$('tabSideload').classList.toggle('on',!inst);if(inst)loadApps(false)}
+async function loadApps(force){if(last.connected!=='true'){if($('appListEmpty'))$('appListEmpty').textContent=LANG==='zh'?'未连接。':'Not connected.';return}try{const r=await api('/api/apps?scope='+encodeURIComponent(appScope));if(r.ok!=='true')throw new Error(r.error||'list failed');appCache=JSON.parse(r.appsJson||'[]');renderAppList()}catch(e){if($('appListEmpty'))$('appListEmpty').textContent=e.message}}
+function renderAppList(){const q=($('appFilter')&&$('appFilter').value||'').toLowerCase();const host=$('appRows');if(!host)return;const rows=appCache.filter(a=>!q||(a.package||'').toLowerCase().indexOf(q)>=0||(a.title||'').toLowerCase().indexOf(q)>=0);host.innerHTML='';if(!rows.length){host.innerHTML='<div class="appEmpty">'+(LANG==='zh'?'没有匹配的应用。':'No matching apps.')+'</div>';return}rows.forEach(a=>{const el=document.createElement('div');el.className='appRow'+(appSel===a.package?' on':'');el.innerHTML='<div class="appGlyph" style="background:hsl('+hue(a.package)+' 62% 42%)">'+(esc((a.title||'A').charAt(0)))+'</div><div><b>'+esc(a.title||a.package)+'</b><span>'+esc(a.package)+(a.installer?' · '+esc(a.installer):'')+'</span></div>';el.onclick=()=>openApp(a.package);host.appendChild(el)})}
+async function openApp(pkg){appSel=pkg;renderAppList();try{const r=await api('/api/apps/detail?package='+encodeURIComponent(pkg));if(r.ok!=='true')throw new Error(r.error||'detail failed');$('appDetailEmpty').style.display='none';$('appDetailBody').style.display='';$('detGlyph').textContent=(r.title||r.package||'A').charAt(0);set('detTitle',r.title||r.package);$('detPills').innerHTML='<span class="pill ver">v'+esc(r.versionName||'?')+(r.versionCode?' ('+esc(r.versionCode)+')':'')+'</span>'+(r.sizeText?'<span class="pill">'+esc(r.sizeText)+'</span>':'')+'<span class="pill">'+(r.user==='true'?(LANG==='zh'?'第三方':'User'):(LANG==='zh'?'系统':'System'))+'</span>';set('detPackage',r.package);set('detVersion',(r.versionName||'-')+' / '+ (r.versionCode||'-'));set('detSdk','min '+(r.minSdk||'-')+' / target '+(r.targetSdk||'-'));set('detInstaller',r.installer||'-');set('detUidAbi',(r.uid||'-')+' / '+(r.abi||'-'));set('detSize',r.sizeText||'-');set('detFirst',r.firstInstall||'-');set('detUpdate',r.lastUpdate||'-');set('detPath',r.apkPath||r.codePath||'-');set('detData',r.dataDir||'-');set('detState',(r.enabled==='true'?(LANG==='zh'?'启用':'enabled'):(LANG==='zh'?'禁用':'disabled'))+(r.stopped==='true'?' / stopped':''));const rt=JSON.parse(r.runtimeJson||'[]');$('detRuntime').innerHTML=rt.length?rt.map(p=>'<div class="permRow"><span>'+esc(p.name)+'</span><span class="pill '+(p.granted==='true'?'ok':'warn')+'">'+(p.granted==='true'?'granted':'denied')+'</span>'+(r.user==='true'?'<button class="resetBtn" data-perm="'+esc(p.name)+'" data-grant="'+(p.granted==='true'?'0':'1')+'">'+(p.granted==='true'?'revoke':'grant')+'</button>':'')+'</div>').join(''):'<div class="hint">-</div>';$('detRequested').textContent=(JSON.parse(r.requestedJson||'[]')||[]).join('\n')||'-';$('detRuntime').querySelectorAll('[data-perm]').forEach(btn=>btn.onclick=()=>appOp(btn.dataset.grant==='1'?'grant':'revoke',{permission:btn.dataset.perm}));$('detUninstall').style.display=r.user==='true'?'':'none';$('detClear').style.display=r.user==='true'?'':'none';$('detDisable').style.display=r.user==='true'?'':'none'}catch(e){notify('详情失败',e.message,'err')}}
+async function appOp(op,extra){if(!appSel)return;const labels={launch:LANG==='zh'?'打开':'Launch',extract:LANG==='zh'?'提取 APK':'Extract APK','force-stop':LANG==='zh'?'强行停止':'Force stop',uninstall:LANG==='zh'?'卸载':'Uninstall',clear:LANG==='zh'?'清除数据':'Clear data',disable:LANG==='zh'?'禁用':'Disable',enable:LANG==='zh'?'启用':'Enable',grant:'grant',revoke:'revoke'};if(op==='uninstall'&&!(await askConfirm(labels.uninstall,t('uninstallAsk')+'\n'+appSel)))return;if(op==='clear'&&!(await askConfirm(labels.clear,t('clearAsk')+'\n'+appSel)))return;if(op==='disable'&&!(await askConfirm(labels.disable,t('disableAsk')+'\n'+appSel)))return;let qs='op='+encodeURIComponent(op)+'&package='+encodeURIComponent(appSel);if(extra&&extra.permission)qs+='&permission='+encodeURIComponent(extra.permission);if(op!=='extract'&&op!=='launch')qs+='&confirm=YES';try{setBusy(true,null);const r=await api('/api/apps/action?'+qs,{method:'POST'});if(r.ok!=='true')throw new Error(r.error||'failed');notify(labels[op]||op,r.result||'ok','ok');if(r.url){set('detExtractHint',(r.sizeText||'')+'  '+ (r.fileName||''));const a=document.createElement('a');a.href=r.url;a.textContent=r.fileName||'apk';a.style.marginLeft='8px';$('detExtractHint').appendChild(a)}if(op==='uninstall'){appSel=null;$('appDetailBody').style.display='none';$('appDetailEmpty').style.display='';await loadApps(true)}else await openApp(appSel)}catch(e){notify(labels[op]||op,e.message,'err')}finally{setBusy(false,null)}}
+const hsMeta={
+'global.stay_on_while_plugged_in':{zh:'插电保持唤醒',en:'Stay on while plugged',note:'0=off 3=USB/AC'},
+'system.screen_off_timeout':{zh:'屏幕超时 (ms)',en:'Screen off timeout (ms)',note:'300000=5min 86400000=24h'},
+'secure.sleep_timeout':{zh:'系统睡眠超时',en:'Sleep timeout',note:'null=default -1=never'},
+'global.wifi_sleep_policy':{zh:'Wi-Fi 休眠策略',en:'Wi-Fi sleep policy',note:'1=default 2=never'},
+'system.screen_brightness':{zh:'亮度 0-255',en:'Brightness 0-255',note:''},
+'system.font_scale':{zh:'字体缩放',en:'Font scale',note:''},
+'system.haptic_feedback_enabled':{zh:'触感反馈',en:'Haptics',note:'0/1'},
+'secure.horizonos:world_movement_turn_type':{zh:'转向类型',en:'Turn type',note:'Quest movement'},
+'secure.horizonos:world_movement_snap_turn_angle':{zh:'快转角度',en:'Snap turn angle',note:''},
+'secure.horizonos:world_movement_narrow_vision_for_comfort':{zh:'舒适窄视野',en:'Comfort tunnel vision',note:'0/1'}
+};
+function hsGroup(id){if(id.indexOf('horizonos')>=0)return 'hsComfort';if(id.indexOf('brightness')>=0||id.indexOf('font_scale')>=0||id.indexOf('haptic')>=0)return 'hsDisplay';return 'hsPowerList'}
+async function renderHeadset(){const power=$('hsPowerList');if(!power)return;if(last.connected==='true'){const warn=(String(last.screenOff)==='86400000'||String(last.sleepTimeout)==='-1');$('hsWarn').textContent=warn?(LANG==='zh'?'当前是 24h/不休眠 调试值':'24h / no-sleep debug values'):'';$('hsDisplayTag').textContent=last.displaySummary||'-';try{const r=await api('/api/quest-settings');if(r.ok==='true')hsCache=JSON.parse(r.settingsJson||'[]')}catch(e){hsCache=[]}}['hsPowerList','hsDisplay','hsComfort'].forEach(id=>{if($(id) && id!=='hsPowerList')$(id).innerHTML=''});if($('hsPowerList')){/* keep paramList clone via set rows */}
+const hosts={hsPowerList:$('hsPowerList'),hsDisplay:$('hsDisplay'),hsComfort:$('hsComfort')};Object.keys(hosts).forEach(k=>{if(k!=='hsPowerList' && hosts[k])hosts[k].innerHTML=''});
+if($('hsPowerList'))$('hsPowerList').innerHTML='';
+hsCache.forEach(item=>{const meta=hsMeta[item.id]||{zh:item.key,en:item.key,note:item.id};const host=hosts[hsGroup(item.id)];if(!host)return;const row=document.createElement('div');row.className='setRow';row.innerHTML='<div><b>'+esc(LANG==='zh'?meta.zh:meta.en)+'</b><span>'+esc(item.id)+' · '+esc(meta.note||'')+'</span></div><input data-hs="'+esc(item.id)+'" value="'+esc(item.value||'')+'"><button class="resetBtn primary" data-hs-save="'+esc(item.id)+'">'+(LANG==='zh'?'写入':'Set')+'</button>';host.appendChild(row)});
+document.querySelectorAll('[data-hs-save]').forEach(btn=>btn.onclick=()=>{const id=btn.getAttribute('data-hs-save');const inp=document.querySelector('[data-hs="'+id+'"]');const dot=id.indexOf('.');const ns=id.slice(0,dot),key=id.slice(dot+1);showConfirm('quest_put',LANG==='zh'?'写入设置':'Write setting','&ns='+encodeURIComponent(ns)+'&key='+encodeURIComponent(key)+'&value='+encodeURIComponent(inp?inp.value:''))})}
+async function downloadAdb(){if(!(await askConfirm(t('adbDownload'),t('adbMissingHint'))))return;try{setBusy(true,null);const r=await api('/api/adb/download?confirm=YES',{method:'POST'});if(r.ok!=='true')throw new Error(r.error||'download failed');notify(t('adbDownload'),r.result||'ok','ok');refresh(true)}catch(e){notify(t('adbDownload'),e.message,'err')}finally{setBusy(false,null)}}
 
 /* ---------- wiring ---------- */
 document.querySelectorAll('[data-action]').forEach(b=>b.onclick=()=>{const label=b.querySelector('b')?.textContent||b.dataset.action;if(b.classList.contains('dangerAction'))showConfirm(b.dataset.action,label,'');else action(b.dataset.action,'',label,b,false)});
@@ -469,6 +591,20 @@ $('exportBtn').onclick=exportHtml;
 $('themeBtn').onclick=()=>{localStorage.setItem(themeKey,document.body.classList.contains('dark')?'light':'dark');theme();notify('主题已切换',document.body.classList.contains('dark')?'当前为深色模式':'当前为浅色模式','ok')};
 $('customSet').onclick=()=>showConfirm('custom_setting','写入 settings','&ns='+encodeURIComponent($('customNs').value)+'&key='+encodeURIComponent($('customKey').value)+'&value='+encodeURIComponent($('customValue').value));
 $('customBroadcast').onclick=()=>showConfirm('custom_broadcast','发送广播','&name='+encodeURIComponent($('broadcastName').value));
-function route(){const id=(location.hash||'#overview').slice(1);document.querySelectorAll('.page').forEach(p=>p.classList.toggle('active',p.id===id));document.querySelectorAll('.nav a').forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+id));const m=pages[id]||pages.overview;set('pageTitle',m[0]);set('pageSub',m[1]);if(id==='logs')loadLogs(false)}
-theme();initInstaller();addEventListener('hashchange',route);route();refresh();loadLogs(false);setInterval(()=>set('clockText',new Date().toLocaleTimeString()),1000);setInterval(()=>refresh(false),15000);
+function route(){let id=(location.hash||'#overview').slice(1);if(id==='install')id='apps';if(id==='settings')id='headset';document.querySelectorAll('.page').forEach(p=>p.classList.toggle('active',p.id===id));document.querySelectorAll('.nav a').forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+id));const key=pages[id]||pages.overview;const m=t(key);set('pageTitle',Array.isArray(m)?m[0]:m);set('pageSub',Array.isArray(m)?m[1]:'');if(id==='logs')loadLogs(false);if(id==='apps')loadApps(false);if(id==='headset')renderHeadset()}
+theme();applyI18n();initInstaller();
+if($('tabInstalled'))$('tabInstalled').onclick=()=>setAppTab('installed');
+if($('tabSideload'))$('tabSideload').onclick=()=>setAppTab('sideload');
+if($('appFilter'))$('appFilter').oninput=renderAppList;
+['scopeUser','scopeAll','scopeSystem'].forEach(id=>{const el=$(id);if(!el)return;el.onclick=()=>{appScope=id==='scopeAll'?'all':(id==='scopeSystem'?'system':'user');loadApps(true)}});
+if($('detLaunch'))$('detLaunch').onclick=()=>appOp('launch');
+if($('detExtract'))$('detExtract').onclick=()=>appOp('extract');
+if($('detStop'))$('detStop').onclick=()=>appOp('force-stop');
+if($('detEnable'))$('detEnable').onclick=()=>appOp('enable');
+if($('detDisable'))$('detDisable').onclick=()=>appOp('disable');
+if($('detClear'))$('detClear').onclick=()=>appOp('clear');
+if($('detUninstall'))$('detUninstall').onclick=()=>appOp('uninstall');
+if($('adbDownloadBtn'))$('adbDownloadBtn').onclick=downloadAdb;
+if($('langBtn'))$('langBtn').onclick=()=>{LANG=LANG==='zh'?'en':'zh';localStorage.setItem('questAdbLang',LANG);applyI18n();route();renderAppList();renderHeadset();notify('Language',LANG,'ok')};
+addEventListener('hashchange',route);route();refresh();loadLogs(false);setInterval(()=>set('clockText',new Date().toLocaleTimeString()),1000);setInterval(()=>refresh(false),15000);
 </script></body></html>
