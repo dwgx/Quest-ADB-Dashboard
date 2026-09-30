@@ -4,14 +4,14 @@
 <div align="center">
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/banner.svg?t=8c1a9f0c024c" />
-  <source media="(prefers-color-scheme: light)" srcset="docs/assets/banner-light.svg?t=8c1a9f0c024c" />
-  <img src="docs/assets/banner.svg?t=8c1a9f0c024c" width="100%" alt="Quest-ADB-Dashboard — Meta Quest ADB 诊断仪表盘 · 可分享的 HTML 报告导出" />
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/banner.svg?t=c97ac186bd7a" />
+  <source media="(prefers-color-scheme: light)" srcset="docs/assets/banner-light.svg?t=c97ac186bd7a" />
+  <img src="docs/assets/banner.svg?t=c97ac186bd7a" width="100%" alt="Quest-ADB-Dashboard — Meta Quest ADB 诊断仪表盘 · 可分享的 HTML 报告导出" />
 </picture>
 
 <br/>
 
-C# · MIT · ★3
+C# · MIT · ★4
 
 [docs](https://github.com/dwgx/Quest-ADB-Dashboard/tree/main/docs) · [releases](https://github.com/dwgx/Quest-ADB-Dashboard/releases)
 
