@@ -1,5 +1,24 @@
 # Quest ADB Dashboard
 
+<!-- dwgx-banner:BEGIN -->
+<div align="center">
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/banner.svg?t=870ca001420b" />
+  <source media="(prefers-color-scheme: light)" srcset="docs/assets/banner-light.svg?t=870ca001420b" />
+  <img src="docs/assets/banner.svg?t=870ca001420b" width="100%" alt="Quest-ADB-Dashboard — Meta Quest ADB 诊断仪表盘 · 可分享的 HTML 报告导出" />
+</picture>
+
+<br/>
+
+C# · MIT · ★3
+
+[docs](https://github.com/dwgx/Quest-ADB-Dashboard/tree/main/docs) · [releases](https://github.com/dwgx/Quest-ADB-Dashboard/releases)
+
+</div>
+<!-- dwgx-banner:END -->
+
+
 Audit and sideload your Meta Quest over ADB — one file, bundled ADB, local WebUI.
 
 Point it at a headset and you get a local control panel: inspect device state,

@@ -1,0 +1,14 @@
+# repo-kit · 本仓库的 banner 规格
+# 改这个文件，workflow 会重新渲染 docs/assets/banner*.svg 与 README 区块
+# 生成器：https://github.com/dwgx/DWGX/tree/main/repo-kit
+owner = "dwgx"
+
+[[repo]]
+name = "Quest-ADB-Dashboard"
+style = "post"
+tagline = "Meta Quest ADB 诊断仪表盘 · 可分享的 HTML 报告导出"
+install = ""
+lang = "C#"
+license = "MIT"
+topics = ["adb", "android", "device-audit", "meta-quest"]
+links = [{ label = "docs", url = "https://github.com/dwgx/Quest-ADB-Dashboard/tree/main/docs" }, { label = "releases", url = "https://github.com/dwgx/Quest-ADB-Dashboard/releases" }]
