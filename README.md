@@ -4,9 +4,9 @@
 <div align="center">
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/banner.svg?t=870ca001420b" />
-  <source media="(prefers-color-scheme: light)" srcset="docs/assets/banner-light.svg?t=870ca001420b" />
-  <img src="docs/assets/banner.svg?t=870ca001420b" width="100%" alt="Quest-ADB-Dashboard — Meta Quest ADB 诊断仪表盘 · 可分享的 HTML 报告导出" />
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/banner.svg?t=8c1a9f0c024c" />
+  <source media="(prefers-color-scheme: light)" srcset="docs/assets/banner-light.svg?t=8c1a9f0c024c" />
+  <img src="docs/assets/banner.svg?t=8c1a9f0c024c" width="100%" alt="Quest-ADB-Dashboard — Meta Quest ADB 诊断仪表盘 · 可分享的 HTML 报告导出" />
 </picture>
 
 <br/>
